@@ -1,0 +1,15 @@
+{
+  "name": "aof-validator",
+  "version": "1.0.0",
+  "description": "Agent Ownership Framework contract validator",
+  "main": "validate-contract.js",
+  "scripts": {
+    "validate": "node validate-contract.js",
+    "test": "node validate-contract.js ../examples/*.yaml"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "js-yaml": "^4.1.0",
+    "chalk": "^5.3.0"
+  }
+}

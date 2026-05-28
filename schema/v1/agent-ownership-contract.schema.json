@@ -1,0 +1,807 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ajwork-art/agent-ownership-framework/schema/v1/agent-ownership-contract.schema.json",
+  "title": "AgentOwnershipContract",
+  "description": "Agent Ownership Framework (AOF) v1 contract. Declares the purpose, ownership, authority, data access, incident response, governance, lifecycle, compliance, risk, signoff, dependencies, and SLA for a production AI agent. Covers all 8 agent governance boundaries.",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "agent",
+    "purpose",
+    "ownership",
+    "authority",
+    "data",
+    "incident_response",
+    "governance",
+    "lifecycle",
+    "compliance",
+    "risk",
+    "signoff",
+    "dependencies",
+    "sla"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "description": "The AOF API version this contract conforms to.",
+      "enum": ["aof/v1"]
+    },
+    "kind": {
+      "type": "string",
+      "description": "The resource kind. Must be AgentOwnershipContract.",
+      "enum": ["AgentOwnershipContract"]
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Contract document metadata. Identifies and versions the contract itself.",
+      "required": ["name", "version", "created", "updated"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique slug identifying this contract. Must be kebab-case.",
+          "pattern": "^[a-z0-9][a-z0-9\\-]*[a-z0-9]$"
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version of this contract document (not the agent software version).",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "created": {
+          "type": "string",
+          "description": "ISO 8601 date when this contract was first created.",
+          "format": "date"
+        },
+        "updated": {
+          "type": "string",
+          "description": "ISO 8601 date when this contract was last updated.",
+          "format": "date"
+        },
+        "labels": {
+          "type": "object",
+          "description": "Key-value string pairs for categorization, filtering, and tooling integration.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "description": "Key-value string pairs for supplementary non-identifying metadata (e.g., ticket URLs, Confluence links, runbook URLs).",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "description": "Describes the AI agent: its identity, classification, and domain.",
+      "required": ["id", "name", "description", "type", "domain"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Globally unique identifier for the agent. Used in logs, alerts, and cross-references. Must be kebab-case.",
+          "pattern": "^[a-z0-9][a-z0-9\\-]*[a-z0-9]$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable display name for the agent.",
+          "minLength": 5
+        },
+        "description": {
+          "type": "string",
+          "description": "Clear description of the agent's behavior and scope. Minimum 50 characters.",
+          "minLength": 50
+        },
+        "type": {
+          "type": "string",
+          "description": "Operational classification of the agent. autonomous=acts without human triggers; hybrid=triggered by humans but acts autonomously; advisory=provides recommendations only.",
+          "enum": ["autonomous", "hybrid", "advisory"]
+        },
+        "domain": {
+          "type": "string",
+          "description": "Business domain the agent operates in (e.g., financial-services, customer-service, operations)."
+        },
+        "tags": {
+          "type": "array",
+          "description": "Free-form tags for search and categorization.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "purpose": {
+      "type": "object",
+      "description": "Boundary 1 — Purpose. Declares the business purpose, intended outcomes, success criteria, and explicit out-of-scope behaviors for this agent.",
+      "required": ["business_purpose", "success_metrics", "out_of_scope"],
+      "additionalProperties": false,
+      "properties": {
+        "business_purpose": {
+          "type": "string",
+          "description": "The business problem this agent solves and why it exists. Must be specific enough to distinguish it from adjacent agents. Minimum 50 characters.",
+          "minLength": 50
+        },
+        "success_metrics": {
+          "type": "object",
+          "description": "Key measurable outcomes that define whether this agent is succeeding. Key = metric name, value = target or description.",
+          "additionalProperties": true
+        },
+        "out_of_scope": {
+          "type": "array",
+          "description": "Explicit list of things this agent is NOT intended to do. This is as important as what it does — it prevents scope creep and clarifies system boundaries.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "description": "Boundary 2 — Ownership. Declares four named governance roles: domain owner (business accountability), technical owner (build and runtime), data owner (data quality and compliance), and risk owner (regulatory exposure). domain_owner and technical_owner are required.",
+      "required": ["domain_owner", "technical_owner", "escalation_path"],
+      "additionalProperties": false,
+      "properties": {
+        "domain_owner": {
+          "$ref": "#/definitions/named_owner",
+          "description": "Business outcome owner. Accountable for acceptable use, business risk if the agent fails, and defining what success looks like. Must be a named person, not a team alias."
+        },
+        "technical_owner": {
+          "$ref": "#/definitions/named_owner",
+          "description": "Engineering accountability owner. Accountable for build quality, runtime behavior, deployment decisions, and operational runbooks."
+        },
+        "data_owner": {
+          "$ref": "#/definitions/named_owner",
+          "description": "Optional. Accountable for data quality, compliance with data governance policy, retention schedule, and data access decisions."
+        },
+        "risk_owner": {
+          "$ref": "#/definitions/named_owner",
+          "description": "Optional. Accountable for regulatory exposure assessment, audit readiness, and communicating risk posture to compliance and legal."
+        },
+        "escalation_path": {
+          "type": "array",
+          "description": "Ordered sequence of escalation contacts. Level 1 is first point of escalation beyond the named owners.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["level", "name", "email", "role"],
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "type": "integer",
+                "description": "Escalation level. Must be sequential starting at 1.",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string",
+                "description": "Full name of the escalation contact."
+              },
+              "email": {
+                "type": "string",
+                "description": "Email address of the escalation contact.",
+                "format": "email"
+              },
+              "role": {
+                "type": "string",
+                "description": "Title or role of the escalation contact."
+              }
+            }
+          }
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "description": "Boundary 3 — Authority. Declares what the agent can decide autonomously, what triggers escalation, what it can never do, and who can stop it.",
+      "required": ["autonomous_decisions", "escalation_triggers", "prohibited_actions", "override_mechanism"],
+      "additionalProperties": false,
+      "properties": {
+        "autonomous_decisions": {
+          "type": "array",
+          "description": "List of decisions this agent is authorized to make without human approval. Each entry must describe the decision type, any limits, and the rationale.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["decision_type", "description"],
+            "additionalProperties": false,
+            "properties": {
+              "decision_type": {
+                "type": "string",
+                "description": "Short label for this type of autonomous decision (e.g., 'issue_refund', 'route_transaction', 'send_notification')."
+              },
+              "limit": {
+                "type": "number",
+                "description": "Optional numeric cap for this decision (e.g., 500 for a $500 refund limit)."
+              },
+              "currency": {
+                "type": "string",
+                "description": "Optional currency code if limit is a monetary cap (e.g., 'USD', 'EUR')."
+              },
+              "requires_approval": {
+                "type": "boolean",
+                "description": "Whether this decision requires human approval before execution. If true, describe the approval mechanism in the description field."
+              },
+              "description": {
+                "type": "string",
+                "description": "Full description of what this decision covers, any conditions or constraints, and why autonomous authority is appropriate."
+              }
+            }
+          }
+        },
+        "escalation_triggers": {
+          "type": "array",
+          "description": "Conditions that require the agent to stop and escalate to a human rather than proceeding autonomously. Minimum 1 item.",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "prohibited_actions": {
+          "type": "array",
+          "description": "Things this agent can NEVER do under any circumstances. These are hard limits, not soft guidelines. Minimum 1 item.",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "override_mechanism": {
+          "type": "object",
+          "description": "Defines who can pause or override this agent and how fast they can act.",
+          "required": ["who_can_pause", "who_can_override"],
+          "additionalProperties": false,
+          "properties": {
+            "who_can_pause": {
+              "type": "array",
+              "description": "Named roles authorized to pause this agent. Each entry must specify the role, the method (how they pause it), and the SLA in minutes.",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["role", "method", "sla_minutes"],
+                "additionalProperties": false,
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "description": "Role or title of the person who can pause this agent."
+                  },
+                  "method": {
+                    "type": "string",
+                    "description": "The mechanism for pausing (e.g., 'feature flag in LaunchDarkly', 'kill switch in ops console', 'PagerDuty escalation')."
+                  },
+                  "sla_minutes": {
+                    "type": "integer",
+                    "description": "Maximum time in minutes from decision-to-pause to agent being fully stopped.",
+                    "minimum": 1
+                  }
+                }
+              }
+            },
+            "who_can_override": {
+              "type": "string",
+              "description": "Named role that can override any agent decision or override the pause/resume decision itself (e.g., 'Chief Risk Officer', 'VP Engineering')."
+            }
+          }
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "description": "Boundary 4 — Data. Declares what data sources the agent can access, what is explicitly prohibited, and how sensitive data must be handled.",
+      "required": ["permitted_sources", "prohibited_sources", "sensitive_data_handling"],
+      "additionalProperties": false,
+      "properties": {
+        "permitted_sources": {
+          "type": "array",
+          "description": "Data sources this agent is explicitly authorized to access. If a source is not listed here, access is not permitted.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source", "access_level"],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Name of the data source (e.g., 'Customer CRM', 'Transaction History DB', 'Fraud Score Ledger')."
+              },
+              "fields": {
+                "type": "array",
+                "description": "Optional list of specific fields or tables the agent can access within this source. If omitted, all fields in the source are permitted.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "access_level": {
+                "type": "string",
+                "description": "Whether the agent can read only or also write to this source.",
+                "enum": ["read", "write"]
+              },
+              "time_window_days": {
+                "type": "integer",
+                "description": "Optional: how many days of historical data the agent is permitted to access.",
+                "minimum": 1
+              },
+              "reason": {
+                "type": "string",
+                "description": "Optional: why access to this source is needed for the agent's purpose."
+              }
+            }
+          }
+        },
+        "prohibited_sources": {
+          "type": "array",
+          "description": "Data sources this agent is explicitly NOT permitted to access. Enumerating prohibitions makes unauthorized access easier to detect.",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "sensitive_data_handling": {
+          "type": "object",
+          "description": "Rules for handling sensitive or personal data. All rules are binding on all environments including dev/staging.",
+          "required": ["must_mask", "must_encrypt_in_transit", "cannot_retain", "retention_policy"],
+          "additionalProperties": false,
+          "properties": {
+            "must_mask": {
+              "type": "array",
+              "description": "PII or sensitive fields that must be masked in all logs, traces, and outputs. These fields must never appear in plain text in any audit or debugging context.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "must_encrypt_in_transit": {
+              "type": "boolean",
+              "description": "All data in transit between this agent and any data source or downstream system must be encrypted (TLS 1.2+ minimum)."
+            },
+            "cannot_retain": {
+              "type": "boolean",
+              "description": "If true, this agent cannot store sensitive data beyond the duration of the active request/session. No caching, no persistent local state."
+            },
+            "retention_policy": {
+              "type": "string",
+              "description": "Defines how long data processed by this agent may be retained, and under what authority. Must reference a regulatory or policy basis. Minimum 20 characters.",
+              "minLength": 20
+            }
+          }
+        }
+      }
+    },
+    "incident_response": {
+      "type": "object",
+      "description": "Boundaries 5 and 8 — Evidence and Failure Accountability. Declares who investigates failures, what the investigation must cover, and who owns communication to customers, stakeholders, and regulators.",
+      "required": ["investigator_primary", "investigator_secondary", "investigation_scope", "communication", "post_incident_review"],
+      "additionalProperties": false,
+      "properties": {
+        "investigator_primary": {
+          "type": "string",
+          "description": "Role name of the primary investigator for any production incident (e.g., 'technical_owner', 'Senior Engineer On-Call'). This person leads root cause analysis and log access."
+        },
+        "investigator_secondary": {
+          "type": "string",
+          "description": "Role name of the secondary investigator — takes over if primary is unavailable, or co-investigates for critical-tier incidents."
+        },
+        "log_access": {
+          "type": "array",
+          "description": "Optional: named roles that have access to agent logs and traces for investigation purposes. If omitted, access is governed by the organization's default log access policy.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "investigation_scope": {
+          "type": "array",
+          "description": "Mandatory questions the investigation must answer. Minimum 3 items. These define the minimum bar for incident reconstruction.",
+          "minItems": 3,
+          "items": {
+            "type": "string"
+          }
+        },
+        "communication": {
+          "type": "object",
+          "description": "Defines who owns external and internal communication during and after an incident.",
+          "required": ["customer_owner", "stakeholder_owner", "compliance_owner"],
+          "additionalProperties": false,
+          "properties": {
+            "customer_owner": {
+              "type": "string",
+              "description": "Role responsible for communicating with affected customers during and after an incident."
+            },
+            "stakeholder_owner": {
+              "type": "string",
+              "description": "Role responsible for communicating with internal stakeholders (executives, product, business units)."
+            },
+            "compliance_owner": {
+              "type": "string",
+              "description": "Role responsible for communicating with regulators, auditors, and legal counsel. This person determines whether regulatory disclosure is required."
+            }
+          }
+        },
+        "post_incident_review": {
+          "type": "object",
+          "description": "Requirements for post-incident reviews (post-mortems). Required for any agent with risk_tier medium or above.",
+          "required": ["required"],
+          "additionalProperties": false,
+          "properties": {
+            "required": {
+              "type": "boolean",
+              "description": "Whether a post-incident review document must be produced after every production incident."
+            },
+            "sla_days": {
+              "type": "integer",
+              "description": "Number of days after incident resolution by which the post-incident review must be completed and published.",
+              "minimum": 1
+            },
+            "participants": {
+              "type": "array",
+              "description": "Roles that must participate in the post-incident review.",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "description": "Controls review cadence, change approval requirements, and the governing body.",
+      "required": ["review_cadence", "approval_required_for", "change_control_board"],
+      "additionalProperties": false,
+      "properties": {
+        "review_cadence": {
+          "type": "string",
+          "description": "How often the contract and agent behavior must be formally reviewed.",
+          "enum": ["weekly", "monthly", "quarterly", "annually"]
+        },
+        "approval_required_for": {
+          "type": "array",
+          "description": "List of change types that require explicit governance board approval before implementation.",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "change_control_board": {
+          "type": "string",
+          "description": "Name or contact of the change control board or governance committee for this agent."
+        },
+        "last_reviewed": {
+          "type": "string",
+          "description": "ISO 8601 date of the most recent governance review.",
+          "format": "date"
+        },
+        "next_review": {
+          "type": "string",
+          "description": "ISO 8601 date of the next scheduled governance review.",
+          "format": "date"
+        },
+        "annotations": {
+          "type": "object",
+          "description": "Optional key-value annotations for governance metadata (e.g., runbook URL, on-call schedule link).",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "description": "Boundary 6 — Lifecycle. Tracks the deployment status, versioning policy, monitoring expectations, and retirement criteria for this agent.",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Current lifecycle status. active=in production; conditional=limited rollout; pilot=experimental; paused=temporarily suspended; retired=decommissioned.",
+          "enum": ["active", "conditional", "pilot", "paused", "retired"]
+        },
+        "deployed_at": {
+          "type": "string",
+          "description": "ISO 8601 date when the agent was first deployed to production.",
+          "format": "date"
+        },
+        "deprecated_at": {
+          "type": "string",
+          "description": "ISO 8601 date when this agent was marked deprecated (still running but no new traffic)."
+        },
+        "retirement_date": {
+          "type": "string",
+          "description": "ISO 8601 date when this agent will be fully decommissioned."
+        },
+        "replacement_agent_id": {
+          "type": "string",
+          "description": "The agent.id of the agent that replaces this one (if deprecated or retired)."
+        },
+        "versioning": {
+          "type": "object",
+          "description": "Optional. Defines the change approval policy and what constitutes a material change requiring a governance review.",
+          "additionalProperties": false,
+          "properties": {
+            "all_changes_require_approval": {
+              "type": "boolean",
+              "description": "If true, any change to the agent or its contract requires explicit governance approval before deployment."
+            },
+            "material_change_definition": {
+              "type": "array",
+              "description": "Conditions that constitute a material change, triggering a new review cycle and signoff requirement.",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "monitoring": {
+          "type": "object",
+          "description": "Optional. Documents what is being monitored in production and how frequently the monitoring outputs are reviewed.",
+          "additionalProperties": false,
+          "properties": {
+            "real_time_metrics": {
+              "type": "array",
+              "description": "Metrics being monitored in real time in production (e.g., error rate, latency p99, decision distribution).",
+              "items": {
+                "type": "string"
+              }
+            },
+            "review_frequency_days": {
+              "type": "integer",
+              "description": "How often (in days) monitoring outputs are formally reviewed by the technical owner.",
+              "minimum": 1
+            }
+          }
+        },
+        "retirement": {
+          "type": "object",
+          "description": "Optional. Defines the conditions that trigger decommissioning and the planned review date.",
+          "additionalProperties": false,
+          "properties": {
+            "criteria": {
+              "type": "array",
+              "description": "Conditions that would trigger decommissioning of this agent (e.g., replacement agent is stable, regulatory requirement removed).",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sunset_date": {
+              "type": "string",
+              "description": "Hard date after which this agent must be retired, regardless of replacement status.",
+              "format": "date"
+            },
+            "planned_review_date": {
+              "type": "string",
+              "description": "Date when the retirement decision will be formally reviewed.",
+              "format": "date"
+            }
+          }
+        }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "description": "Regulatory frameworks, data classification, PII handling policy, and audit requirements.",
+      "required": [
+        "frameworks",
+        "data_classification",
+        "pii_handling",
+        "audit_log_required",
+        "retention_policy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "frameworks": {
+          "type": "array",
+          "description": "Regulatory or compliance frameworks this agent must satisfy.",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "data_classification": {
+          "type": "string",
+          "description": "Sensitivity level of data the agent accesses or produces. public=no restrictions; internal=employee access only; restricted=limited access with controls; highly-restricted=strongest controls, explicit authorization required.",
+          "enum": ["public", "internal", "restricted", "highly-restricted"]
+        },
+        "pii_handling": {
+          "type": "string",
+          "description": "Plain-language description of how personally identifiable information is processed, stored, and protected.",
+          "minLength": 20
+        },
+        "audit_log_required": {
+          "type": "boolean",
+          "description": "Whether all agent inputs, outputs, and decisions must be written to an immutable audit log."
+        },
+        "retention_policy": {
+          "type": "string",
+          "description": "Data retention requirements for agent inputs, outputs, logs, and decisions.",
+          "minLength": 20
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "description": "Risk profile of the agent: tier, blast radius, human oversight requirements, and kill switch.",
+      "required": [
+        "risk_tier",
+        "blast_radius",
+        "human_in_the_loop_required"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "risk_tier": {
+          "type": "string",
+          "description": "Risk classification. low=minimal impact if it fails; medium=significant but contained; high=major business or customer impact; critical=existential or regulatory risk.",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "blast_radius": {
+          "type": "string",
+          "description": "Plain-language description of the worst-case impact if this agent fails, is compromised, or behaves incorrectly. Must be specific and honest.",
+          "minLength": 50
+        },
+        "human_in_the_loop_required": {
+          "type": "boolean",
+          "description": "Whether a human must review and approve consequential actions before the agent executes them."
+        },
+        "kill_switch_owner": {
+          "type": "string",
+          "description": "Email of the named individual authorized to immediately disable this agent in production.",
+          "format": "email"
+        }
+      }
+    },
+    "signoff": {
+      "type": "object",
+      "description": "Boundary 7 — Approval. Named signatures from each owner role confirming they have reviewed this contract and accept accountability before the agent launches.",
+      "required": ["domain_owner", "technical_owner"],
+      "additionalProperties": false,
+      "properties": {
+        "domain_owner": {
+          "$ref": "#/definitions/signoff_entry",
+          "description": "Sign-off from the domain owner. Required before launch. Confirms business purpose, out-of-scope boundaries, and acceptable use have been reviewed."
+        },
+        "technical_owner": {
+          "$ref": "#/definitions/signoff_entry",
+          "description": "Sign-off from the technical owner. Required before launch. Confirms build quality, authority limits, data access, and incident response are correctly declared."
+        },
+        "data_owner": {
+          "$ref": "#/definitions/signoff_entry",
+          "description": "Optional sign-off from the data owner. Required if a data_owner is assigned in the ownership section."
+        },
+        "risk_owner": {
+          "$ref": "#/definitions/signoff_entry",
+          "description": "Optional sign-off from the risk owner. Required if a risk_owner is assigned in the ownership section."
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "External models, services, and data sources this agent depends on.",
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "type": "array",
+          "description": "LLMs or ML models used by the agent.",
+          "items": {
+            "$ref": "#/definitions/dependency"
+          }
+        },
+        "services": {
+          "type": "array",
+          "description": "Internal or external services the agent calls.",
+          "items": {
+            "$ref": "#/definitions/dependency"
+          }
+        },
+        "data_sources": {
+          "type": "array",
+          "description": "Databases, event streams, or datasets the agent reads from.",
+          "items": {
+            "$ref": "#/definitions/dependency"
+          }
+        }
+      }
+    },
+    "sla": {
+      "type": "object",
+      "description": "Service level agreement for the agent's production operation.",
+      "required": ["availability", "max_latency_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "type": "number",
+          "description": "Target availability as a percentage (0-100). Example: 99.9 means 99.9% uptime.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_latency_ms": {
+          "type": "integer",
+          "description": "Maximum acceptable end-to-end latency in milliseconds.",
+          "minimum": 1
+        },
+        "error_rate_threshold": {
+          "type": "string",
+          "description": "Maximum acceptable error rate as a human-readable string (e.g., '0.1%', '< 1 per 1000 requests')."
+        },
+        "throughput_limit": {
+          "type": "string",
+          "description": "Maximum request throughput as a human-readable string (e.g., '500 req/min', '10000 req/hour')."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "named_owner": {
+      "type": "object",
+      "description": "A named individual in a specific governance role for this agent.",
+      "required": ["name", "role", "email", "accountability"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full name of the owner."
+        },
+        "role": {
+          "type": "string",
+          "description": "Job title or governance role of this owner (e.g., 'Director, Customer Support', 'Staff Engineer')."
+        },
+        "email": {
+          "type": "string",
+          "description": "Work email address of the owner. Must be a real individual's email, not a team alias.",
+          "format": "email"
+        },
+        "accountability": {
+          "type": "array",
+          "description": "Explicit list of what this owner is responsible for. Be specific — this defines what they are signing off on.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "signoff_entry": {
+      "type": "object",
+      "description": "A named signature from an owner role confirming they have reviewed and accepted accountability.",
+      "required": ["name", "date", "confirmation"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full name of the person signing off."
+        },
+        "date": {
+          "type": "string",
+          "description": "ISO 8601 date of sign-off.",
+          "format": "date"
+        },
+        "confirmation": {
+          "type": "string",
+          "description": "The statement this person is confirming by signing. Should be specific to their role's accountability."
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "description": "An external system, model, or data source this agent depends on.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the dependency."
+        },
+        "version": {
+          "type": "string",
+          "description": "Version or release identifier (e.g., 'gpt-4o-2024-11-20', '3.2.1')."
+        },
+        "type": {
+          "type": "string",
+          "description": "Category of dependency (e.g., llm, ml-model, rest-api, postgresql, kafka, s3)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of what this dependency is used for."
+        }
+      }
+    }
+  }
+}

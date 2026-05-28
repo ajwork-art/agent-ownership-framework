@@ -1,0 +1,376 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) v1
+# Example: Customer Support Agent
+#
+# Domain: Customer Service
+# Risk Tier: Medium | Type: Autonomous | Compliance: SOX, GLBA
+# Owner: Sarah Chen
+#
+# 8-Boundary governance coverage:
+#   1. Purpose       — automate tier-1 support, bounded refund authority
+#   2. Ownership     — Sarah Chen (domain), Marcus Johnson (technical)
+#   3. Authority     — autonomous refunds <= $500, escalation triggers defined
+#   4. Data          — CRM, transaction history; prohibited: raw card data, legal docs
+#   5. Evidence      — technical_owner investigates, CRM logs, session transcripts
+#   6. Lifecycle     — active, quarterly monitoring review, retirement criteria
+#   7. Approval      — domain_owner and technical_owner sign-off required pre-launch
+#   8. Failure Acct  — domain_owner communicates to customers, risk_owner to regulators
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+
+metadata:
+  name: support-agent
+  version: 2.1.0
+  created: "2025-03-10"
+  updated: "2026-05-01"
+  labels:
+    env: production
+    team: customer-support
+    channel: omnichannel
+  annotations:
+    jira-epic: "CS-4421"
+    runbook-url: "https://wiki.example.com/display/CS/support-agent-runbook"
+    oncall-schedule: "https://pagerduty.example.com/schedules/CS-ONCALL"
+
+agent:
+  id: support-agent
+  name: Customer Support Agent
+  description: >
+    Handles tier-1 customer support interactions across chat, email, and web
+    channels. Resolves account inquiries, processes refunds up to $500, and
+    escalates complex cases to human agents. Does not handle legal disputes,
+    fraud claims, or refunds exceeding $500 without human approval.
+  type: autonomous
+  domain: customer-service
+  tags:
+    - customer-facing
+    - omnichannel
+    - refunds
+    - tier-1
+
+# =============================================================================
+# BOUNDARY 1: PURPOSE
+# =============================================================================
+purpose:
+  business_purpose: >
+    Automate resolution of tier-1 customer support inquiries at scale to reduce
+    human agent workload, improve first-contact resolution rates, and provide
+    24/7 coverage across all support channels. The agent handles routine inquiries
+    that previously required human agents averaging 8-12 minutes per resolution.
+  success_metrics:
+    first_contact_resolution_rate: ">= 75% of tier-1 cases resolved without escalation"
+    average_handle_time_seconds: "< 180 seconds for routine account inquiries"
+    customer_satisfaction_score: ">= 4.2 / 5.0 post-interaction CSAT"
+    escalation_rate: "< 25% of all interactions escalated to human agents"
+    refund_accuracy_rate: ">= 99.5% of automated refunds applied correctly"
+  out_of_scope:
+    - "Legal disputes, regulatory complaints, or formal grievance procedures"
+    - "Fraud claims or suspected account takeover — must escalate immediately to fraud team"
+    - "Refunds exceeding $500 — require human agent approval"
+    - "Account closure — requires Director-level human approval"
+    - "Subscription plan modifications — require human confirmation"
+    - "Any interaction involving a customer under active legal hold"
+
+# =============================================================================
+# BOUNDARY 2: OWNERSHIP
+# =============================================================================
+ownership:
+  domain_owner:
+    name: Sarah Chen
+    role: "Director, Customer Support Operations"
+    email: sarah.chen@example.com
+    accountability:
+      - "Defining acceptable use of the agent in customer interactions"
+      - "Owning customer experience outcomes and refund policy enforcement"
+      - "Business risk if the agent issues incorrect refunds or mishandles escalations"
+      - "Authorizing changes to refund limits or escalation thresholds"
+
+  technical_owner:
+    name: Marcus Johnson
+    role: "Senior Engineer, Customer Support Platform"
+    email: marcus.johnson@example.com
+    accountability:
+      - "Build quality, testing, and deployment of the agent"
+      - "Runtime behavior monitoring and SLA compliance"
+      - "Ensuring authority limits are enforced in production code"
+      - "Maintaining runbook and incident response procedures"
+
+  escalation_path:
+    - level: 1
+      name: David Park
+      email: david.park@example.com
+      role: VP Customer Experience
+    - level: 2
+      name: Lisa Torres
+      email: lisa.torres@example.com
+      role: Chief Operating Officer
+
+# =============================================================================
+# BOUNDARY 3: AUTHORITY
+# =============================================================================
+authority:
+  autonomous_decisions:
+    - decision_type: issue_refund
+      limit: 500
+      currency: USD
+      requires_approval: false
+      description: >
+        Issue refunds up to $500 per transaction for eligible reasons (shipping
+        delays, product defects, billing errors). Refund policy eligibility is
+        checked against the Billing Service rules before issuance.
+    - decision_type: resolve_account_inquiry
+      description: >
+        Retrieve account information, explain billing history, and provide account
+        status updates without financial impact. No limit applies.
+    - decision_type: create_support_case
+      description: >
+        Create, update, and close support cases in the CRM for any tier-1 interaction.
+    - decision_type: send_followup_notification
+      description: >
+        Send a single follow-up email or chat message after case resolution,
+        using approved templates only. Cannot compose freeform customer communications.
+
+  escalation_triggers:
+    - "Refund request exceeds $500 per transaction"
+    - "Customer mentions legal action, regulatory complaint, or data privacy rights"
+    - "Suspected fraud, account takeover, or identity theft indicators"
+    - "Customer expresses distress (keywords: unsafe, threat, emergency)"
+    - "Three or more failed resolution attempts for the same case in one session"
+    - "Interaction outside business hours 8am-10pm local time for time-sensitive issues"
+
+  prohibited_actions:
+    - "Cannot process refunds above $500 without explicit human agent approval"
+    - "Cannot close or suspend customer accounts"
+    - "Cannot access raw payment card numbers — tokenized payment IDs only"
+    - "Cannot modify subscription plans or pricing"
+    - "Cannot contact customers outside 8am-10pm local time"
+    - "Cannot handle legal or regulatory complaints — must escalate immediately"
+    - "Cannot delete customer records or modify account ownership"
+
+  override_mechanism:
+    who_can_pause:
+      - role: "technical_owner or on-call engineer"
+        method: "Feature flag 'support-agent-enabled' in LaunchDarkly"
+        sla_minutes: 3
+      - role: "domain_owner"
+        method: "Support Operations console — disables new session creation immediately"
+        sla_minutes: 10
+    who_can_override: "VP Customer Experience (escalation level 1)"
+
+# =============================================================================
+# BOUNDARY 4: DATA
+# =============================================================================
+data:
+  permitted_sources:
+    - source: "Customer CRM Platform"
+      fields:
+        - customer_id
+        - account_status
+        - contact_history
+        - case_notes
+        - subscription_tier
+      access_level: write
+      reason: "Core data source for customer record lookup, case creation, and resolution logging."
+    - source: "Transaction History (Read-Only)"
+      fields:
+        - transaction_id
+        - transaction_date
+        - transaction_amount
+        - merchant_name
+        - transaction_status
+      access_level: read
+      time_window_days: 180
+      reason: "Customer transaction lookup for billing dispute resolution."
+    - source: "Customer Knowledge Base"
+      access_level: read
+      reason: "Support articles, FAQs, and resolution playbooks for generating accurate responses."
+    - source: "Billing Service"
+      access_level: write
+      reason: "Refund processing and transaction status retrieval."
+
+  prohibited_sources:
+    - "Raw payment card database — tokenized references only; no access to PAN store"
+    - "Internal employee HR records"
+    - "Legal case management system"
+    - "Fraud investigation database — read or write access prohibited"
+    - "Customer PII exports or data warehouse tables containing unmasked SSN or date of birth"
+
+  sensitive_data_handling:
+    must_mask:
+      - full_name            # Replace with initials in logs
+      - account_number       # Truncate to last 4 digits in logs
+      - email_address        # Mask domain portion in logs
+      - phone_number         # Mask all but last 4 digits
+    must_encrypt_in_transit: true
+    cannot_retain: true
+    retention_policy: >
+      Customer interaction transcripts retained for 7 years per SOX requirements.
+      Session metadata and decision logs retained for 3 years. PII elements in
+      logs masked within 24 hours of session close per GLBA Safeguards Rule.
+
+# =============================================================================
+# BOUNDARIES 5 & 8: INCIDENT RESPONSE
+# =============================================================================
+incident_response:
+  investigator_primary: "technical_owner (Marcus Johnson)"
+  investigator_secondary: "Customer Support Platform On-Call Engineer"
+  log_access:
+    - "technical_owner"
+    - "Customer Support Platform On-Call Engineer"
+    - "domain_owner (read-only, for business impact assessment)"
+  investigation_scope:
+    - "Which customers and cases were affected, and what was the financial exposure from erroneous refunds?"
+    - "Did the agent exceed its $500 refund authority limit at any point during the incident?"
+    - "Was any unmasked customer PII exposed in logs or outputs during the incident?"
+    - "What was the sequence of agent decisions that led to the failure?"
+    - "Were escalation triggers functioning correctly, or did they fail to fire?"
+  communication:
+    customer_owner: "domain_owner (Sarah Chen) — coordinates customer notifications with CX team"
+    stakeholder_owner: "domain_owner — briefs VP Customer Experience and operations leadership"
+    compliance_owner: "domain_owner — escalates to Legal if GLBA customer data obligations triggered"
+  post_incident_review:
+    required: true
+    sla_days: 5
+    participants:
+      - domain_owner
+      - technical_owner
+      - "Customer Support Platform On-Call Engineer"
+      - "QA representative for interaction quality review"
+
+# =============================================================================
+# GOVERNANCE
+# =============================================================================
+governance:
+  review_cadence: quarterly
+  approval_required_for:
+    - "Increase in refund authority limit above $500"
+    - "New channel integration (SMS, voice, social media)"
+    - "Changes to escalation triggers or thresholds"
+    - "Model version updates or prompt changes"
+    - "Access to new customer data fields"
+  change_control_board: "Customer Experience Governance Committee"
+  last_reviewed: "2026-01-15"
+  next_review: "2026-04-15"
+
+# =============================================================================
+# BOUNDARY 6: LIFECYCLE
+# =============================================================================
+lifecycle:
+  status: active
+  deployed_at: "2025-03-20"
+  versioning:
+    all_changes_require_approval: true
+    material_change_definition:
+      - "Change to refund limit (autonomous_decisions.issue_refund.limit)"
+      - "Adding or removing a prohibited_action"
+      - "Change in ownership roles"
+      - "Adding new customer data fields to permitted_sources"
+  monitoring:
+    real_time_metrics:
+      - "Refund issuance rate (alert if > 2x baseline)"
+      - "Escalation rate per channel (alert if tier-1 escalation rate > 35%)"
+      - "Session error rate (alert if > 1%)"
+      - "CSAT score rolling 7-day average"
+    review_frequency_days: 7
+  retirement:
+    criteria:
+      - "Next-generation support agent (support-agent-v3) reaches production stability"
+      - "All channel integrations migrated to v3"
+    planned_review_date: "2027-03-01"
+
+# =============================================================================
+# COMPLIANCE
+# =============================================================================
+compliance:
+  frameworks:
+    - SOX
+    - GLBA
+  data_classification: restricted
+  pii_handling: >
+    Agent accesses customer name, email, phone number, account number, and
+    transaction history. All PII is masked in logs — full names replaced with
+    initials, account numbers truncated to last 4 digits. Customer data is not
+    retained by the agent beyond the active session; session transcripts stored
+    in the CRM with role-based access controls.
+  audit_log_required: true
+  retention_policy: >
+    Customer interaction transcripts retained for 7 years per SOX requirements.
+    Session metadata and decision logs retained for 3 years. PII elements masked
+    within 24 hours of session close per GLBA Safeguards Rule.
+
+# =============================================================================
+# RISK
+# =============================================================================
+risk:
+  risk_tier: medium
+  blast_radius: >
+    A malfunction could result in incorrect refunds, missed escalations for urgent
+    customer issues, or inappropriate responses at scale. At peak volume, the agent
+    handles approximately 2,000 concurrent sessions. A systematic failure could
+    affect refund processing for up to 10,000 customers per hour, with financial
+    exposure up to $5M in erroneous refunds if the $500 limit enforcement fails.
+    Reputational risk from public-facing failures is significant.
+  human_in_the_loop_required: true
+  kill_switch_owner: sarah.chen@example.com
+
+# =============================================================================
+# BOUNDARY 7: SIGNOFF
+# =============================================================================
+signoff:
+  domain_owner:
+    name: Sarah Chen
+    date: "2025-03-08"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the agent's
+      business purpose, customer interaction boundaries, and refund authority limits.
+      I confirm the out-of-scope behaviors are correctly defined and I accept
+      business accountability for the agent's decisions in customer interactions.
+  technical_owner:
+    name: Marcus Johnson
+    date: "2025-03-09"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the agent's build
+      quality, runtime behavior, and operational readiness. I confirm the $500 refund
+      limit and all prohibited actions are enforced in production code, and that
+      the data access is scoped to permitted_sources only.
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+dependencies:
+  models:
+    - name: Support LLM
+      version: "gpt-4o-2024-11-20"
+      type: llm
+      description: "Primary language model for generating support responses and intent classification."
+  services:
+    - name: CRM Platform
+      version: "v8.2"
+      type: internal-api
+      description: "Customer record lookup, case creation, and resolution logging."
+    - name: Billing Service
+      version: "v4.1"
+      type: internal-api
+      description: "Refund processing and transaction history retrieval."
+    - name: Escalation Router
+      version: "v2.0"
+      type: internal-api
+      description: "Routes complex cases to available human agents based on skill and queue."
+  data_sources:
+    - name: Customer Knowledge Base
+      type: vector-store
+      description: "Embeddings of support articles, FAQs, and resolution playbooks."
+    - name: Transaction History (Read-Only)
+      type: postgresql
+      description: "Read replica for customer transaction lookup. No write access."
+
+# =============================================================================
+# SLA
+# =============================================================================
+sla:
+  availability: 99.9
+  max_latency_ms: 4000
+  error_rate_threshold: "0.5%"
+  throughput_limit: "2000 concurrent sessions"

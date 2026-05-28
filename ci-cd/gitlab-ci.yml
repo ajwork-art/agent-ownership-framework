@@ -1,0 +1,36 @@
+stages:
+  - validate
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+cache:
+  paths:
+    - .pip-cache/
+
+validate-aof-contracts:
+  stage: validate
+  image: python:3.11-slim
+  before_script:
+    - pip install --quiet pyyaml>=6.0 jsonschema>=4.0
+  script:
+    - echo "Validating AOF agent ownership contracts..."
+    - python tools/validate-contract.py examples/*.yaml
+  after_script:
+    - |
+      if [ $CI_JOB_STATUS = "failed" ]; then
+        echo ""
+        echo "Contract validation failed."
+        echo "Run locally: python tools/validate-contract.py --verbose examples/*.yaml"
+        echo "See docs/TROUBLESHOOTING.md for common errors."
+      fi
+  rules:
+    - changes:
+        - examples/**/*.yaml
+        - schema/**
+      when: always
+    - when: never
+  artifacts:
+    when: on_failure
+    reports:
+      dotenv: validation-results.env

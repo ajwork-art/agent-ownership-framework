@@ -1,0 +1,666 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) v1 — Annotated Reference Example
+# Payment Processing Agent
+#
+# This file demonstrates every field in the AOF v1 schema with realistic
+# values and explanatory comments. Use it as a reference when writing your
+# own contracts. Replace all values with your actual agent details.
+#
+# All 8 governance boundaries are covered:
+#   1. Purpose       — business_purpose, success_metrics, out_of_scope
+#   2. Ownership     — domain_owner, technical_owner, data_owner, risk_owner
+#   3. Authority     — autonomous_decisions, escalation_triggers, prohibited_actions, override_mechanism
+#   4. Data          — permitted_sources, prohibited_sources, sensitive_data_handling
+#   5. Evidence      — incident_response: investigator, investigation_scope, log_access
+#   6. Lifecycle     — status, versioning, monitoring, retirement
+#   7. Approval      — signoff: domain_owner, technical_owner, data_owner, risk_owner
+#   8. Failure Acct  — incident_response: communication, post_incident_review
+#
+# Validate: python tools/validate-contract.py schema/v1/agent-ownership-contract.example.yaml
+# Schema: schema/v1/agent-ownership-contract.schema.json
+# =============================================================================
+
+# Required. Must always be "aof/v1" for v1 contracts.
+apiVersion: aof/v1
+
+# Required. Must always be "AgentOwnershipContract".
+kind: AgentOwnershipContract
+
+# =============================================================================
+# METADATA — About the contract document itself, not the agent software.
+# The metadata section identifies and versions the contract. When you update
+# the contract (even a small wording change), increment the version and update
+# the updated date. This creates an auditable history in Git.
+# =============================================================================
+metadata:
+  # Unique slug for this contract. Must be kebab-case, lowercase.
+  # Convention: use the agent's function, not the team name.
+  # Must match agent.id below.
+  name: payment-processing-agent
+
+  # Semantic version of this CONTRACT document (not the agent code).
+  # Patch = minor edits, minor = new fields or scope changes, major = ownership transfer.
+  version: 2.0.0
+
+  # ISO 8601 date when this contract was first created (not last modified).
+  created: "2026-01-15"
+
+  # ISO 8601 date of the most recent change. Update this on every change.
+  updated: "2026-05-01"
+
+  # Labels are used for filtering in CI/CD dashboards and tooling.
+  # Use consistent label keys across all your contracts for easy querying.
+  labels:
+    env: production
+    team: payments-platform
+    cost-center: CC-4412
+    risk-tier: high
+
+  # Annotations are supplementary metadata. Runbook URL, ticket numbers, and
+  # on-call schedules belong here — they are human-readable context, not
+  # governance declarations.
+  annotations:
+    jira-epic: "PAY-1024"
+    confluence-page: "https://wiki.example.com/display/PAY/payment-agent"
+    oncall-schedule: "https://pagerduty.example.com/schedules/P1234AB"
+    runbook-url: "https://wiki.example.com/display/PAY/payment-agent-runbook"
+
+# =============================================================================
+# AGENT — Identity and classification.
+# This section describes what the agent is. The description must include what
+# the agent does NOT do — negative scope is as important as positive scope.
+# =============================================================================
+agent:
+  # Must match metadata.name exactly. Used in logs, alerts, and cross-references.
+  id: payment-processing-agent
+
+  # Human-readable display name. Minimum 5 characters.
+  name: Payment Processing Agent
+
+  # Describe what this agent does AND what it explicitly does not do.
+  # The "does not" clause defines system boundaries — it prevents scope creep
+  # and makes cross-agent responsibilities clear.
+  description: >
+    Processes payment transactions for the checkout pipeline. Validates payment
+    methods, applies real-time fraud scoring, and routes approved transactions to
+    the payment gateway. Does not store raw card data and does not handle refunds.
+    Operates on tokenized payment credentials only. Does not interact with customers
+    directly. Transactions above $10,000 require human approval before processing.
+
+  # Operational classification. Choose one:
+  #   autonomous = acts without human triggers (e.g., fraud scoring pipeline)
+  #   hybrid     = triggered by humans, acts autonomously within declared scope
+  #   advisory   = recommendations only; humans make all final decisions
+  # "hybrid" is appropriate here: checkout system triggers the agent, but the
+  # agent then acts autonomously within its declared authority.
+  type: hybrid
+
+  # Business domain. Use a consistent taxonomy across your organization.
+  domain: financial-services
+
+  # Free-form tags for search and categorization. Not used in validation.
+  tags:
+    - payments
+    - real-time
+    - checkout
+    - pci-scope
+
+# =============================================================================
+# BOUNDARY 1: PURPOSE
+# Declares the business reason for this agent's existence, what success looks
+# like, and what is explicitly outside its scope.
+#
+# The out_of_scope list is the most underused field in practice. If a new
+# feature request would require adding something to this list first, that is
+# a governance signal — it means the scope is changing, not just growing.
+# =============================================================================
+purpose:
+  # The business problem being solved. Must be specific enough that a new team
+  # member can understand why this agent exists and what it replaces or enables.
+  # Minimum 50 characters.
+  business_purpose: >
+    Automate payment validation and routing for all checkout sessions to reduce
+    manual payment processing overhead, improve checkout conversion rates, and
+    ensure real-time fraud screening at transaction volume that cannot be manually
+    reviewed. This agent replaces a synchronous payment validation step that
+    previously added 2-3 seconds of latency per checkout session.
+
+  # Measurable outcomes. Key = metric name, value = target.
+  # These are used in quarterly governance reviews to assess whether the agent
+  # is still delivering on its stated purpose. Use concrete targets, not vague
+  # aspirations.
+  success_metrics:
+    checkout_conversion_rate: ">= 94% (baseline was 91% pre-automation)"
+    payment_processing_latency_ms: "< 3000ms p99"
+    fraud_catch_rate: ">= 98% of known fraud patterns detected"
+    false_positive_rate: "< 0.5% of legitimate transactions blocked"
+    availability: ">= 99.9% uptime"
+
+  # Explicit scope exclusions. If a new requirement falls into this list, it
+  # requires a formal scope expansion review before the agent is modified.
+  # Write these as "Cannot" statements — they are governance guardrails.
+  out_of_scope:
+    - "Refund processing — handled by the Refunds Agent (refund-processing-agent)"
+    - "Fraud investigation or cardholder dispute resolution"
+    - "Storing or logging raw card numbers (PAN), CVV, or full magnetic stripe data"
+    - "Customer-facing communication or notifications"
+    - "Payment method enrollment or tokenization — handled by Token Vault Service"
+    - "Currency conversion or multi-currency settlement"
+
+# =============================================================================
+# BOUNDARY 2: OWNERSHIP
+# Four named governance roles. domain_owner and technical_owner are required.
+# data_owner and risk_owner are optional but strongly recommended for high-risk
+# agents operating in regulated domains.
+#
+# Every owner must be a named individual. Never use a team alias or shared
+# inbox — teams do not get paged at 2 AM, people do.
+# =============================================================================
+ownership:
+  # The business outcome owner. Accountable for: what success looks like,
+  # whether the agent is being used acceptably, and business risk if it fails.
+  # This is often a product or operations leader, not the engineer who built it.
+  domain_owner:
+    name: Jane Smith
+    role: "Director, Payments Product"
+    email: jane.smith@example.com
+    accountability:
+      - "Defining and approving the business purpose and success metrics"
+      - "Determining whether the agent's behavior is acceptable use"
+      - "Owning business risk if the agent fails to process payments correctly"
+      - "Authorizing scope changes that affect the purpose section"
+
+  # The engineering accountability owner. Accountable for how it is built,
+  # how it behaves at runtime, and operational readiness.
+  technical_owner:
+    name: Carlos Mendez
+    role: "Staff Engineer, Payments Platform"
+    email: carlos.mendez@example.com
+    accountability:
+      - "Build quality, code review, and test coverage for the agent"
+      - "Runtime behavior, error handling, and SLA compliance"
+      - "Deployment decisions, rollback procedures, and runbook maintenance"
+      - "Ensuring authority limits in this contract are enforced in production code"
+
+  # The data accountability owner. Accountable for what data the agent accesses
+  # and whether access is compliant with data governance policies.
+  # This role is optional but strongly recommended for PCI-DSS and GLBA scope.
+  data_owner:
+    name: Priya Nair
+    role: "Data Governance Lead, Payments"
+    email: priya.nair@example.com
+    accountability:
+      - "Approving all data sources listed in the data.permitted_sources section"
+      - "Ensuring data access complies with PCI-DSS and GLBA requirements"
+      - "Defining and enforcing the data retention policy"
+      - "Reviewing any request to expand data access scope"
+
+  # The risk accountability owner. Accountable for regulatory exposure assessment.
+  # This role is optional but required for agents in regulated domains.
+  risk_owner:
+    name: Robert Kim
+    role: "VP Risk and Compliance, Payments"
+    email: robert.kim@example.com
+    accountability:
+      - "Assessing regulatory exposure under PCI-DSS, SOX, and GLBA"
+      - "Determining whether regulatory disclosure is required after incidents"
+      - "Representing the agent's risk posture to auditors and examiners"
+      - "Approving the risk tier classification and blast radius assessment"
+
+  # Escalation path: used during incidents when owners are unavailable or the
+  # incident exceeds the authority of the named owners.
+  # Levels must be sequential starting at 1. Minimum 1 level required.
+  escalation_path:
+    - level: 1
+      name: Sarah Wong
+      email: sarah.wong@example.com
+      role: VP Engineering, Payments
+    - level: 2
+      name: Marcus Thompson
+      email: marcus.thompson@example.com
+      role: Chief Technology Officer
+
+# =============================================================================
+# BOUNDARY 3: AUTHORITY
+# What the agent can decide on its own, what forces escalation,
+# what it can never do, and who can stop it.
+#
+# The autonomous_decisions list is exhaustive: if a decision type is not listed,
+# it requires human approval. The prohibited_actions list is absolute: these
+# are hard limits that cannot be overridden by configuration.
+# =============================================================================
+authority:
+  # Exhaustive list of things this agent is authorized to decide without human
+  # review. Each entry must include: decision_type (short label), description
+  # (full explanation). Optional: limit (numeric cap), currency, requires_approval.
+  autonomous_decisions:
+    - decision_type: route_transaction
+      description: >
+        Route approved transactions to the appropriate payment gateway based on
+        card type, transaction amount, and gateway health. Selects from the
+        pre-approved gateway list only (Stripe, Braintree, Adyen).
+    - decision_type: validate_payment_method
+      description: >
+        Validate tokenized payment credentials against the Token Vault Service.
+        Can reject transactions with invalid or expired tokens without human review.
+    - decision_type: apply_fraud_score
+      description: >
+        Apply the real-time fraud score from the fraud scoring service to the
+        transaction context. Score is advisory — the agent cannot block transactions
+        above $10,000 based on score alone; those trigger the escalation path.
+    - decision_type: process_transaction
+      limit: 10000       # Numeric cap — $10,000 USD maximum
+      currency: USD
+      requires_approval: false
+      description: >
+        Authorize and submit transactions up to $10,000 USD without human approval.
+        The fraud score must be below the critical threshold. Transactions above
+        $10,000 require explicit human approval via the Payment Ops console.
+
+  # Conditions that cause the agent to stop and escalate to a human instead of
+  # proceeding. These should be specific and testable — not vague.
+  escalation_triggers:
+    - "Transaction amount exceeds $10,000 USD"
+    - "Fraud score is at or above the critical threshold (>= 0.85)"
+    - "Payment gateway returns an unexpected error code not in the known-error list"
+    - "Token Vault Service is unreachable for more than 500ms"
+    - "More than 3 consecutive validation failures for the same customer session"
+    - "Agent receives a card type or currency not in its approved processing list"
+
+  # Hard limits. Cannot be overridden by configuration — changing these requires
+  # a governance review and contract update. Write as "Cannot X" statements.
+  prohibited_actions:
+    - "Cannot access, log, or transmit raw card numbers (PAN), CVV, or full magnetic stripe data"
+    - "Cannot initiate refunds — refund authority belongs to the Refunds Agent only"
+    - "Cannot approve transactions above $10,000 without human review in Payment Ops console"
+    - "Cannot store PII outside the designated Payments Vault — no local caching of customer data"
+    - "Cannot call external payment gateways not listed in the dependencies section"
+    - "Cannot delegate transaction decisions to sub-agents or external LLMs"
+    - "Cannot modify customer account records — read-only access to account data"
+
+  # Defines who can stop this agent and how fast they can act.
+  # The sla_minutes field is a contractual commitment — it should be tested.
+  override_mechanism:
+    who_can_pause:
+      - role: "technical_owner or on-call engineer"
+        method: "Feature flag 'payment-agent-enabled' in LaunchDarkly — disables the agent within 60 seconds"
+        sla_minutes: 2
+      - role: "domain_owner"
+        method: "Payment Ops console kill switch — triggers graceful shutdown with in-flight transaction drain"
+        sla_minutes: 5
+    # This role can override any pause/resume decision — highest authority.
+    who_can_override: "VP Risk and Compliance (risk_owner)"
+
+# =============================================================================
+# BOUNDARY 4: DATA
+# What data sources are permitted, what is prohibited, and how sensitive
+# data must be handled.
+#
+# The permitted_sources list is a whitelist: if a source is not listed here,
+# access is not permitted. The prohibited_sources list makes common temptations
+# explicit and detectable.
+# =============================================================================
+data:
+  # Only sources listed here are permitted. Any access not listed is unauthorized.
+  # Each source entry requires: source (name) and access_level (read or write).
+  # Optional: fields (specific columns), time_window_days, reason.
+  permitted_sources:
+    - source: "Payments Database (Read Replica)"
+      fields:
+        - transaction_id
+        - token_reference
+        - transaction_amount
+        - merchant_id
+        - transaction_timestamp
+      access_level: read
+      time_window_days: 90      # Only last 90 days of history permitted
+      reason: "Transaction history lookup for velocity checks and duplicate detection."
+    - source: "Token Vault Service"
+      access_level: read
+      reason: "Validates tokenized payment credentials. Returns masked token status only — no raw card data."
+    - source: "Fraud Score Service"
+      access_level: read
+      reason: "Real-time fraud score for each transaction. Returns score and label, no raw signals."
+    - source: "Transaction Ledger"
+      access_level: write
+      reason: "Writes transaction status (approved/declined/pending) and routing outcome to audit trail."
+    - source: "Gateway Health Check API"
+      access_level: read
+      reason: "Determines which payment gateways are currently healthy for routing decisions."
+
+  # Sources this agent must never access, regardless of technical capability.
+  # Being explicit about prohibitions makes unauthorized access easier to detect
+  # in audit logs.
+  prohibited_sources:
+    - "Raw card database (PAN store) — access requires PCI-DSS Level 1 certification workflow"
+    - "Customer PII database (full names, SSN, date of birth)"
+    - "Refunds ledger — write access belongs to refund-processing-agent only"
+    - "Internal employee database"
+    - "Fraud investigation case management system"
+    - "Any data source not listed in permitted_sources above"
+
+  # Binding rules for sensitive data handling. These apply in all environments,
+  # including dev and staging — not just production.
+  sensitive_data_handling:
+    # These fields must be masked in all logs, traces, and outputs. No exceptions.
+    must_mask:
+      - token_reference       # Mask the last 8 characters in logs
+      - cardholder_name       # Replace with initials only
+      - billing_zip           # Omit from all log outputs
+      - merchant_account_id   # Truncate to first 4 characters
+
+    # TLS 1.2+ minimum on all connections to and from this agent.
+    must_encrypt_in_transit: true
+
+    # If true, the agent cannot cache sensitive data beyond the active session.
+    # This is appropriate for payment processing — no local state between requests.
+    cannot_retain: true
+
+    # Retention policy for data processed or logged by this agent.
+    # Must reference a regulatory or policy basis. Minimum 20 characters.
+    retention_policy: >
+      Transaction records and agent decision logs retained for 7 years per SOX
+      Section 802 requirements. PII elements purged after 90 days unless required
+      for active dispute resolution. Audit logs retained for 7 years minimum and
+      stored in WORM (write-once read-many) audit storage per PCI-DSS Requirement 10.7.
+
+# =============================================================================
+# BOUNDARIES 5 & 8: INCIDENT RESPONSE
+# Covers Evidence (who investigates, who accesses logs, how incidents are
+# reconstructed) and Failure Accountability (who communicates to customers,
+# stakeholders, and regulators during and after an incident).
+# =============================================================================
+incident_response:
+  # Primary investigator role for any production incident.
+  # This person leads root cause analysis, owns log access, and produces the
+  # incident timeline. Must be a named role, not a team alias.
+  investigator_primary: "technical_owner (Carlos Mendez)"
+
+  # Secondary investigator if primary is unavailable (PTO, conflict of interest,
+  # or critical-tier incident requiring co-investigation).
+  investigator_secondary: "Senior Engineer On-Call (Payments Platform)"
+
+  # Roles authorized to access agent logs and traces for investigation.
+  # If omitted, access is governed by the organization's default log access policy.
+  log_access:
+    - "technical_owner"
+    - "Payments Platform On-Call Engineer"
+    - "risk_owner (read-only, for compliance review)"
+    - "Security Incident Response Team"
+
+  # These questions must be answered in every incident investigation.
+  # They define the minimum bar for incident reconstruction — what a regulator
+  # or auditor would require to understand what happened.
+  # Minimum 3 items required.
+  investigation_scope:
+    - "What was the exact sequence of agent decisions in the 30 minutes before and after the incident?"
+    - "Which transactions were affected, and what was the total financial exposure?"
+    - "Was any PCI-DSS-protected data (even tokenized) exposed or at risk during the incident?"
+    - "Did the agent stay within its declared authority limits — specifically the $10,000 transaction cap?"
+    - "What was the root cause — model behavior, infrastructure failure, data quality, or configuration drift?"
+    - "Was the incident detectable earlier, and what monitoring gap allowed it to go undetected?"
+
+  # Who communicates with whom during and after an incident.
+  # Every agent must have a named owner for customer, stakeholder, and compliance communication.
+  communication:
+    customer_owner: "domain_owner (Jane Smith) — coordinates with Customer Experience on customer notifications"
+    stakeholder_owner: "domain_owner — briefs VP Engineering, Finance leadership, and CEO office on business impact"
+    compliance_owner: "risk_owner (Robert Kim) — determines PCI-DSS disclosure obligations and communicates with card networks and legal"
+
+  # Post-incident review (post-mortem) requirements.
+  # Required for any agent with risk_tier medium or above.
+  post_incident_review:
+    required: true
+    sla_days: 5    # Must be completed within 5 business days of incident resolution
+    participants:
+      - domain_owner
+      - technical_owner
+      - data_owner
+      - risk_owner
+      - "Payments Platform On-Call Engineer who responded"
+      - "Representative from Customer Experience if customers were affected"
+
+# =============================================================================
+# GOVERNANCE — Review cadence and change control.
+# =============================================================================
+governance:
+  # How often the contract and agent behavior must be formally reviewed.
+  # Options: weekly, monthly, quarterly, annually.
+  # Quarterly is appropriate for high-risk, customer-adjacent agents.
+  review_cadence: quarterly
+
+  # Changes that require explicit governance board approval.
+  # Be specific — vague entries like "any significant change" are unenforceable.
+  approval_required_for:
+    - "Model version change or fraud scoring threshold adjustment"
+    - "New data source or external API integration"
+    - "Increase in autonomous transaction limit above $10,000"
+    - "Scope expansion beyond current payment types (e.g., adding ACH or crypto)"
+    - "Changes to escalation trigger thresholds"
+    - "Any change to the prohibited_actions list"
+
+  # The governing body responsible for approving changes.
+  change_control_board: "Payments Risk and Compliance Committee"
+
+  # ISO 8601 date of the most recent formal review.
+  last_reviewed: "2026-01-10"
+
+  # ISO 8601 date of the next scheduled review.
+  next_review: "2026-04-10"
+
+  # Optional annotations specific to governance (oncall, runbook, etc.)
+  annotations:
+    oncall: "https://pagerduty.example.com/schedules/P1234AB"
+    runbook: "https://wiki.example.com/display/PAY/payment-agent-runbook"
+
+# =============================================================================
+# BOUNDARY 6: LIFECYCLE
+# Tracks deployment status, versioning policy, monitoring expectations,
+# and retirement criteria.
+# =============================================================================
+lifecycle:
+  # Current lifecycle status. Options: active, conditional, pilot, paused, retired.
+  status: active
+
+  # ISO 8601 date the agent was first deployed to production.
+  deployed_at: "2026-01-20"
+
+  # Versioning policy for this agent's contract.
+  versioning:
+    # If true, any change to the agent or contract requires governance approval.
+    all_changes_require_approval: true
+    # What constitutes a "material change" that triggers a new review cycle.
+    material_change_definition:
+      - "Any change to autonomous_decisions limits or decision types"
+      - "Any change to prohibited_actions"
+      - "Adding or removing a data source from permitted_sources"
+      - "Change in ownership (domain_owner, technical_owner, data_owner, risk_owner)"
+      - "Change in risk tier or blast radius assessment"
+
+  # What is actively monitored in production.
+  monitoring:
+    real_time_metrics:
+      - "Transaction success rate (target >= 99.5%)"
+      - "Gateway routing latency p99 (target < 3000ms)"
+      - "Fraud score distribution (alert if high-risk bucket > 5%)"
+      - "Escalation trigger frequency (alert on sudden spike above baseline)"
+      - "Token validation error rate (alert if > 0.1%)"
+    review_frequency_days: 7    # Technical owner reviews monitoring outputs weekly
+
+  # Retirement criteria and timeline.
+  retirement:
+    criteria:
+      - "Replacement agent (payment-processing-agent-v2) reaches stable production status for 90 days"
+      - "All active payment integrations migrated to v2 agent"
+      - "Governance board approves retirement at quarterly review"
+    planned_review_date: "2027-01-10"
+
+# =============================================================================
+# COMPLIANCE — Regulatory frameworks and data handling requirements.
+# =============================================================================
+compliance:
+  # Applicable regulatory frameworks. Minimum 1 required.
+  frameworks:
+    - PCI-DSS
+    - SOX
+    - GLBA
+
+  # Sensitivity level of data the agent accesses or produces.
+  # Options: public, internal, restricted, highly-restricted.
+  data_classification: restricted
+
+  # Plain-language description of how PII is processed, stored, and protected.
+  # Minimum 20 characters. Be specific about what PII is touched and how.
+  pii_handling: >
+    The agent processes tokenized payment credentials only. Raw card numbers (PAN),
+    CVV codes, and full card data are never accessible to the agent. Cardholder names
+    and billing addresses are processed in-memory only and not persisted by the agent.
+    All PII access is logged to the immutable audit trail per PCI-DSS Requirement 10.
+
+  # Whether all agent inputs, outputs, and decisions must be written to an
+  # immutable audit log. Required for PCI-DSS Requirement 10 compliance.
+  audit_log_required: true
+
+  # Data retention requirements for agent inputs, outputs, logs, and decisions.
+  # Must reference a regulatory or policy basis. Minimum 20 characters.
+  retention_policy: >
+    Transaction records and agent decision logs retained for 7 years per SOX
+    Section 802 requirements. PII elements purged after 90 days unless required
+    for active dispute resolution. Audit logs retained for 7 years minimum and
+    stored in WORM (write-once read-many) audit storage per PCI-DSS Requirement 10.7.
+
+# =============================================================================
+# RISK — Risk profile, blast radius, and safety controls.
+# =============================================================================
+risk:
+  # Risk classification. Options: low, medium, high, critical.
+  # "high" is appropriate for a payment processing agent with customer financial impact.
+  risk_tier: high
+
+  # Worst-case impact if this agent fails, is compromised, or behaves incorrectly.
+  # Minimum 50 characters. Write this as if you are briefing a VP the day it fails.
+  # Be specific about scope, financial exposure, and regulatory implications.
+  blast_radius: >
+    A malfunction or compromise could result in failed payment processing for all
+    active checkout sessions, causing revenue loss across the entire checkout pipeline.
+    At peak load, this affects approximately 5,000 transactions per minute and could
+    result in customer-facing errors, abandoned carts, and financial loss of up to $2M
+    per hour. A security breach could expose tokenized payment data for all affected
+    sessions, triggering PCI-DSS incident reporting obligations to card networks and
+    potential SOX material weakness disclosure if financial controls are affected.
+
+  # Whether a human must review and approve consequential actions before execution.
+  # For this agent: true because transactions above $10,000 require human approval.
+  human_in_the_loop_required: true
+
+  # Email of the named individual authorized to immediately disable this agent.
+  # Must be a real individual who is on-call and monitoring.
+  kill_switch_owner: carlos.mendez@example.com
+
+# =============================================================================
+# BOUNDARY 7: SIGNOFF
+# Named signatures from each owner confirming they have reviewed this contract
+# and accept accountability before the agent launches.
+#
+# All four roles sign here if assigned in the ownership section.
+# The agent may not go to production until all required signatures are present.
+# =============================================================================
+signoff:
+  # Domain owner confirms: business purpose is accurate, out-of-scope behaviors
+  # are correctly defined, and they accept business accountability.
+  domain_owner:
+    name: Jane Smith
+    date: "2026-01-14"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the agent's
+      business purpose, acceptable use boundaries, and business outcomes. I confirm
+      the out-of-scope behaviors are correctly defined and the success metrics
+      accurately reflect the business intent. I accept accountability for the
+      agent's decisions in all checkout payment processing interactions.
+
+  # Technical owner confirms: authority limits are enforced in code, data access
+  # is correctly scoped, and the agent is operationally ready.
+  technical_owner:
+    name: Carlos Mendez
+    date: "2026-01-14"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the agent's build
+      quality, runtime behavior, and operational readiness. I confirm that the
+      authority limits and prohibited actions declared here are enforced in the
+      production codebase and that all data access is scoped to permitted_sources only.
+      The $10,000 transaction limit and the kill switch have been tested and validated.
+
+  # Data owner confirms: data access is compliant and retention policy is enforceable.
+  data_owner:
+    name: Priya Nair
+    date: "2026-01-13"
+    confirmation: >
+      I have reviewed the data access declarations in this contract and confirm
+      that all permitted_sources have been approved under our data governance policy.
+      The retention policy is consistent with PCI-DSS and GLBA requirements. The
+      prohibited_sources list correctly excludes all data classified above the
+      agent's permitted access level.
+
+  # Risk owner confirms: risk tier is accurate, regulatory posture is accepted.
+  risk_owner:
+    name: Robert Kim
+    date: "2026-01-14"
+    confirmation: >
+      I have reviewed the risk and compliance sections of this contract and confirm
+      that the risk tier, blast radius, and compliance framework mappings are accurate.
+      I accept accountability for regulatory exposure assessment and audit readiness.
+      PCI-DSS and SOX disclosure obligations have been assessed and documented.
+
+# =============================================================================
+# DEPENDENCIES — External models, services, and data sources.
+# Document every external system this agent depends on.
+# This section is used for dependency risk assessment and incident scoping.
+# =============================================================================
+dependencies:
+  # LLMs or ML models used by the agent.
+  models:
+    - name: Fraud Scoring Model
+      version: "v3.2.1"
+      type: ml-model
+      description: "XGBoost model for real-time transaction fraud scoring. Hosted internally on ML serving infrastructure."
+
+  # Internal or external services the agent calls.
+  services:
+    - name: Stripe Payment Gateway
+      version: "2024-11-20"
+      type: rest-api
+      description: "Primary payment gateway for card processing. PCI-DSS Level 1 certified."
+    - name: Token Vault Service
+      version: "v2.1"
+      type: internal-api
+      description: "Internal service for validating tokenized payment credentials. PCI-DSS certified."
+    - name: Transaction Ledger Service
+      version: "v4.0"
+      type: internal-api
+      description: "Writes transaction status and routing outcome to the payments audit ledger."
+
+  # Databases, event streams, or datasets the agent reads from.
+  data_sources:
+    - name: Payments Database (Read Replica)
+      type: postgresql
+      description: "Read replica of the payments database for transaction history and velocity lookups."
+    - name: Fraud Score Service
+      type: internal-api
+      description: "Real-time fraud scoring service returning risk score and categorical label per transaction."
+
+# =============================================================================
+# SLA — Service level agreement for production operation.
+# All numeric fields must be numbers, not strings.
+# =============================================================================
+sla:
+  # Target availability as a NUMBER (not a string). 99.9 = 99.9% uptime.
+  availability: 99.9
+
+  # Maximum end-to-end latency in milliseconds. Must be an integer.
+  max_latency_ms: 3000
+
+  # Maximum acceptable error rate as a human-readable string.
+  error_rate_threshold: "0.1%"
+
+  # Maximum request throughput as a human-readable string.
+  throughput_limit: "10000 req/min"

@@ -1,0 +1,364 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) v1
+# Example: Risk Analysis Agent
+#
+# Domain: Risk Management
+# Risk Tier: High | Type: Advisory | Compliance: GDPR, SOX, FCRA, GLBA
+# Owner: Jennifer Park
+#
+# 8-Boundary governance coverage:
+#   1. Purpose       — produce structured risk reports for Enterprise Risk Committee
+#   2. Ownership     — Jennifer Park (domain), Ana Reyes (technical), 2-level escalation
+#   3. Authority     — read/aggregate/draft only; no report distribution without human sign-off
+#   4. Data          — enterprise risk register, market signals; prohibited: employee records
+#   5. Evidence      — technical_owner investigates, risk report audit logs, data access logs
+#   6. Lifecycle     — active, quarterly monitoring review, regulatory change retirement criteria
+#   7. Approval      — domain_owner and technical_owner sign-off required pre-launch
+#   8. Failure Acct  — domain_owner communicates to regulators, stakeholders, and compliance
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+
+metadata:
+  name: risk-analysis-agent
+  version: 1.5.0
+  created: "2025-08-15"
+  updated: "2026-03-01"
+  labels:
+    env: production
+    team: risk-analysis
+    regulatory: fcra-regulated
+  annotations:
+    jira-epic: "RISK-3301"
+    confluence-page: "https://wiki.example.com/display/RISK/risk-analysis-agent"
+    runbook-url: "https://wiki.example.com/display/RISK/risk-analysis-runbook"
+    model-documentation: "https://wiki.example.com/display/RISK/risk-model-card"
+
+agent:
+  id: risk-analysis-agent
+  name: Risk Analysis Agent
+  description: >
+    Analyzes aggregated risk signals across business units to produce structured
+    risk reports for the Enterprise Risk Committee. Reads from approved data sources,
+    applies risk scoring frameworks, and drafts reports for human review and sign-off
+    before distribution. All outputs are advisory — the agent cannot distribute reports
+    autonomously, cannot file regulatory reports, and has no write access to any
+    system of record beyond its designated staging area for report drafts.
+  type: advisory
+  domain: risk-management
+  tags:
+    - risk-assessment
+    - regulatory-reporting
+    - advisory
+    - read-only
+    - enterprise-risk
+
+# =============================================================================
+# BOUNDARY 1: PURPOSE
+# =============================================================================
+purpose:
+  business_purpose: >
+    Analyzes aggregated risk signals across business units to produce structured
+    risk reports for the Enterprise Risk Committee. Reads from approved data sources,
+    applies risk scoring frameworks, and drafts reports for human review and sign-off
+    before distribution. The agent replaces manual risk data aggregation that previously
+    required 3-5 days per reporting cycle, enabling the risk team to focus on
+    analysis and stakeholder communication rather than data assembly.
+  success_metrics:
+    report_draft_accuracy: ">95% requiring no material correction before sign-off"
+    coverage_completeness: "100% of risk domains covered per quarterly report"
+    draft_to_approval_days: "<3"
+  out_of_scope:
+    - "Cannot distribute reports without human sign-off from the Director Risk Analysis"
+    - "Cannot access individual employee records, performance data, or compensation information"
+    - "Cannot make investment or portfolio recommendations of any kind"
+    - "Cannot file regulatory reports autonomously — all regulatory submissions require human authorization"
+
+# =============================================================================
+# BOUNDARY 2: OWNERSHIP
+# =============================================================================
+ownership:
+  domain_owner:
+    name: Jennifer Park
+    role: "Director Risk Analysis"
+    email: jennifer.park@example.com
+    accountability:
+      - "Business outcome for regulatory reporting accuracy and completeness"
+      - "Acceptance of risk report content before distribution to the Enterprise Risk Committee"
+      - "Regulatory relationship management if reports contain material errors"
+
+  technical_owner:
+    name: Ana Reyes
+    role: "Senior Engineer, Risk Platform"
+    email: ana.reyes@example.com
+    accountability:
+      - "Build quality, data pipeline integrity, and deployment of the risk analysis agent"
+      - "Runtime behavior monitoring, data source availability, and SLA compliance"
+      - "Ensuring authority limits and read-only data access are enforced in production code"
+      - "Maintaining runbook and incident response procedures"
+
+  escalation_path:
+    - level: 1
+      name: William Chen
+      email: william.chen@example.com
+      role: Compliance Officer
+    - level: 2
+      name: Constance Okafor
+      email: constance.okafor@example.com
+      role: Chief Risk Officer
+
+# =============================================================================
+# BOUNDARY 3: AUTHORITY
+# =============================================================================
+authority:
+  autonomous_decisions:
+    - decision_type: read_and_aggregate_risk_signals
+      description: >
+        Read and aggregate risk signals from all approved data sources without human
+        approval. This is a read-only operation. The agent queries approved sources,
+        applies the risk scoring framework, and stores aggregated signals in the
+        staging area for report generation.
+    - decision_type: draft_risk_report
+      description: >
+        Draft structured risk reports to the designated staging area without human
+        approval. Drafted reports are not distributed — they are placed in the
+        review queue for human sign-off before any distribution occurs.
+    - decision_type: flag_risk_anomaly
+      description: >
+        Flag anomalies in risk metrics that exceed the materiality threshold without
+        human approval. Flags are informational alerts sent to the domain_owner for
+        review. The agent cannot act on anomalies — it reports them.
+
+  escalation_triggers:
+    - "Anomaly detected in risk metrics that exceeds the materiality threshold defined in the scoring framework"
+    - "Data source unavailable for more than 1 hour during a reporting cycle"
+    - "Draft report confidence score falls below 90% — indicating insufficient data quality for reliable aggregation"
+
+  prohibited_actions:
+    - "Cannot distribute reports or summaries without human sign-off from Director Risk Analysis"
+    - "Cannot access individual employee performance data, compensation records, or personal HR information"
+    - "Cannot join board-sensitive data with operational data across classification boundaries"
+    - "Cannot file regulatory reports or submit any document to external regulators autonomously"
+
+  override_mechanism:
+    who_can_pause:
+      - role: "Director Risk Analysis (domain_owner)"
+        method: "Risk platform dashboard kill switch — pauses data aggregation and report generation within 60 minutes"
+        sla_minutes: 60
+      - role: "Technical owner (Ana Reyes)"
+        method: "Control plane feature flag — pauses agent data access within 10 minutes"
+        sla_minutes: 10
+    who_can_override: "Chief Risk Officer"
+
+# =============================================================================
+# BOUNDARY 4: DATA
+# =============================================================================
+data:
+  permitted_sources:
+    - source: "Enterprise Risk Register"
+      access_level: read
+      reason: "Primary source of risk event records, control assessments, and risk ratings across business units."
+    - source: "Market Risk Signals"
+      access_level: read
+      reason: "Daily market risk snapshot including bond spreads, equity volatility, and sector risk indices."
+    - source: "Regulatory Exposure Database"
+      access_level: read
+      reason: "Regulatory filing status, exposure limits, and compliance obligation tracking."
+    - source: "Audit Findings System"
+      access_level: read
+      reason: "Internal and external audit findings used as input to risk report coverage requirements."
+    - source: "Risk Report Staging Area"
+      access_level: write
+      reason: "Write destination for draft reports awaiting human review. No distribution capability from this system."
+
+  prohibited_sources:
+    - "Individual employee records, HR performance data, or compensation information"
+    - "Personal customer account data or individual customer transaction history"
+    - "Board meeting minutes or board-sensitive strategic planning materials"
+    - "Any data source not listed in permitted_sources above"
+
+  sensitive_data_handling:
+    must_mask:
+      - individual_employee_id
+    must_encrypt_in_transit: true
+    cannot_retain: false
+    retention_policy: >
+      Risk reports and associated aggregated data retained 10 years per regulatory
+      record-keeping requirements. Market risk signal snapshots retained for 7 years
+      per SOX requirements. Audit access logs retained 5 years per FCRA requirements.
+      GDPR erasure requests processed within 30 days for non-SOX-retained records;
+      conflicting retention obligations documented in the legal hold register.
+
+# =============================================================================
+# BOUNDARIES 5 & 8: INCIDENT RESPONSE
+# =============================================================================
+incident_response:
+  investigator_primary: "technical_owner (Ana Reyes)"
+  investigator_secondary: "domain_owner (Jennifer Park)"
+  log_access:
+    - "technical_owner"
+    - "Risk Platform On-Call Engineer"
+    - "domain_owner (read-only, for business impact and regulatory exposure assessment)"
+    - "Chief Risk Officer (read-only, for critical incidents affecting regulatory filings)"
+  investigation_scope:
+    - "What data was incorrectly aggregated or sourced — which risk signals were affected?"
+    - "Did any draft report contain a material error that could affect regulatory reporting decisions?"
+    - "Was any report distributed to the Enterprise Risk Committee without the required human sign-off?"
+    - "Were regulatory filing deadlines affected by the incident, and is immediate notification required?"
+    - "Did the agent access any data source outside its declared permitted_sources?"
+  communication:
+    customer_owner: "domain_owner (Jennifer Park) — coordinates with Enterprise Risk Committee on report status"
+    stakeholder_owner: "domain_owner — briefs Chief Risk Officer and Compliance Officer on incident scope"
+    compliance_owner: "domain_owner — determines whether regulatory disclosure obligations were triggered"
+  post_incident_review:
+    required: true
+    sla_days: 5
+    participants:
+      - domain_owner
+      - technical_owner
+      - "Risk Platform On-Call Engineer"
+      - "Compliance Officer representative"
+
+# =============================================================================
+# GOVERNANCE
+# =============================================================================
+governance:
+  review_cadence: quarterly
+  approval_required_for:
+    - "New data source access (any addition to permitted_sources)"
+    - "Risk scoring model change or methodology update"
+    - "Report template change affecting Enterprise Risk Committee deliverables"
+    - "Scope expansion to new risk domains or regulatory reporting frameworks"
+  change_control_board: "Credit Risk Governance Committee"
+  last_reviewed: "2025-11-15"
+  next_review: "2026-02-15"
+
+# =============================================================================
+# BOUNDARY 6: LIFECYCLE
+# =============================================================================
+lifecycle:
+  status: active
+  deployed_at: "2025-09-01"
+  versioning:
+    all_changes_require_approval: true
+    material_change_definition:
+      - "Any change to risk scoring methodology or materiality thresholds"
+      - "Adding or removing permitted data sources"
+      - "Change in report template affecting regulatory coverage"
+      - "Change in ownership roles"
+  monitoring:
+    real_time_metrics:
+      - "Data source availability rate (alert if any source unavailable > 30 minutes during reporting cycle)"
+      - "Report confidence score (alert if below 90%)"
+      - "Anomaly flag rate (alert if exceeds 3x baseline in a single reporting period)"
+      - "Draft report generation time (alert if exceeds 4 hours)"
+    review_frequency_days: 30
+  retirement:
+    criteria:
+      - "Next-generation risk reporting platform reaches production stability for 90 days"
+      - "Enterprise Risk Committee approves transition to replacement reporting system"
+    planned_review_date: "2027-09-01"
+
+# =============================================================================
+# COMPLIANCE
+# =============================================================================
+compliance:
+  frameworks:
+    - GDPR
+    - SOX
+    - FCRA
+    - GLBA
+  data_classification: restricted
+  pii_handling: >
+    Agent accesses aggregated risk data with individual employee IDs masked via
+    the privacy-preserving data layer. No SSNs, compensation data, or personal
+    customer account information is accessible. GDPR data subjects may request
+    erasure; risk assessment records required for regulatory reporting must be
+    retained per SOX requirements. Conflicting retention obligations are documented
+    in the legal hold register maintained by the compliance team.
+  audit_log_required: true
+  retention_policy: >
+    Risk assessment outputs retained for 7 years per SOX requirements. Credit
+    bureau data access logs retained for 5 years per FCRA requirements. GDPR
+    erasure requests processed within 30 days for non-SOX-retained records.
+    All records stored in WORM-compliant audit storage per regulatory requirements.
+
+# =============================================================================
+# RISK
+# =============================================================================
+risk:
+  risk_tier: high
+  blast_radius: >
+    Although advisory, systematic bias or errors in the agent's risk report drafts
+    could influence Enterprise Risk Committee decisions affecting regulatory filings,
+    capital allocation, and risk appetite statements. A model failure producing
+    systematically incorrect risk aggregations could result in material misstatements
+    in regulatory reports, triggering examination by financial regulators. FCRA
+    violations carry per-violation statutory damages. Recovery requires manual review
+    of all reports produced during the failure window, which could take weeks depending
+    on volume and the quarterly reporting cycle timing.
+  human_in_the_loop_required: true
+  kill_switch_owner: jennifer.park@example.com
+
+# =============================================================================
+# BOUNDARY 7: SIGNOFF
+# =============================================================================
+signoff:
+  domain_owner:
+    name: Jennifer Park
+    date: "2026-03-01"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the risk analysis
+      agent's business purpose, report accuracy boundaries, and regulatory exposure.
+      I confirm that no report can be distributed without my sign-off, that the agent
+      is advisory only, and that I accept business accountability for the accuracy
+      of reports drafted by the agent before human review and approval.
+  technical_owner:
+    name: Ana Reyes
+    date: "2026-03-01"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the risk analysis
+      agent's build quality, runtime behavior, and operational readiness. I confirm
+      that the read-only authority is enforced across all data sources, that no
+      distribution capability exists in the agent's staging write path, and that
+      all data access is scoped to permitted_sources only.
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+dependencies:
+  models:
+    - name: Risk Assessment LLM
+      version: "gpt-4o-2024-11-20"
+      type: llm
+      description: "Synthesizes multi-source risk signals into structured risk narratives and report sections."
+    - name: Credit Risk Scoring Model
+      version: "v4.1.0"
+      type: ml-model
+      description: "Internal risk scoring model providing probability-of-default and risk rating estimates."
+  services:
+    - name: Credit Data Aggregation Service
+      version: "v3.2"
+      type: internal-api
+      description: "Provides masked and normalized risk data. Handles FCRA compliance at the data layer."
+    - name: Market Data Service
+      version: "v2.1"
+      type: internal-api
+      description: "Real-time market signals: bond spreads, equity volatility, sector risk indices."
+  data_sources:
+    - name: Enterprise Risk Register
+      type: postgresql
+      description: "Primary source of risk event records, control assessments, and risk ratings."
+    - name: Regulatory Filing Database
+      type: postgresql
+      description: "Read access to filed financial statements, regulatory disclosures, and compliance obligations."
+
+# =============================================================================
+# SLA
+# =============================================================================
+sla:
+  availability: 99.0
+  max_latency_ms: 60000
+  error_rate_threshold: "0.5%"
+  throughput_limit: "100 assessments/hour"

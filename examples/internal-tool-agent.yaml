@@ -1,0 +1,342 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) v1
+# Example: Internal Developer Tool Agent
+#
+# Domain: Internal Tooling
+# Risk Tier: Low | Type: Autonomous | Compliance: internal-policy
+# Owner: David Wu
+#
+# 8-Boundary governance coverage:
+#   1. Purpose       — assist engineering teams with read-only developer experience tasks
+#   2. Ownership     — David Wu (domain), Sam Rivera (technical), 2-level escalation
+#   3. Authority     — search docs, summarize PRs, answer API questions; read-only only
+#   4. Data          — internal docs, GitHub repos, API spec registry; prohibited: customer data
+#   5. Evidence      — technical_owner investigates, query logs, output review
+#   6. Lifecycle     — active, annual monitoring review, replacement system retirement criteria
+#   7. Approval      — domain_owner and technical_owner sign-off required pre-launch
+#   8. Failure Acct  — domain_owner communicates to stakeholders, technical_owner to compliance
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+
+metadata:
+  name: internal-tool-agent
+  version: 1.1.0
+  created: "2025-10-01"
+  updated: "2026-04-01"
+  labels:
+    env: production
+    team: platform-engineering
+    audience: internal-only
+  annotations:
+    jira-epic: "ENG-7712"
+    runbook-url: "https://wiki.example.com/display/ENG/internal-tool-agent-runbook"
+
+agent:
+  id: internal-tool-agent
+  name: Internal Developer Tool Agent
+  description: >
+    Assists internal engineering teams with developer experience tasks: searching
+    internal documentation, summarizing pull request diffs, and answering questions
+    about internal APIs from the approved knowledge base. Operates exclusively on
+    approved internal read-only sources. Has no access to customer data, production
+    databases, financial records, or any external systems. Cannot execute code,
+    write to any system, or access data classified above internal.
+  type: autonomous
+  domain: internal-tooling
+  tags:
+    - developer-productivity
+    - internal
+    - engineering
+    - low-risk
+    - read-only
+
+# =============================================================================
+# BOUNDARY 1: PURPOSE
+# =============================================================================
+purpose:
+  business_purpose: >
+    Assists internal engineering teams with developer experience tasks: searching
+    internal documentation, summarizing pull request diffs, and answering questions
+    about internal APIs. Read-only against approved internal knowledge sources. This
+    agent reduces the time engineers spend searching fragmented internal documentation,
+    estimated at 30-45 minutes per engineer per day, enabling faster onboarding and
+    reducing context-switching overhead during development workflows.
+  success_metrics:
+    query_resolution_rate: ">80%"
+    developer_satisfaction: ">4/5"
+    false_information_rate: "<2%"
+  out_of_scope:
+    - "Cannot execute code, run shell commands, or interact with any production system"
+    - "Cannot access customer data, financial records, or any data classified above internal"
+    - "Cannot write to any system — outputs are text responses only, users apply changes themselves"
+    - "Cannot access HR records, compensation data, or employee personal information"
+
+# =============================================================================
+# BOUNDARY 2: OWNERSHIP
+# =============================================================================
+ownership:
+  domain_owner:
+    name: David Wu
+    role: "Engineering Manager, Automation"
+    email: david.wu@example.com
+    accountability:
+      - "Business outcome for developer productivity tooling and engineering team satisfaction"
+      - "Scope decisions for internal tool access and approved knowledge source additions"
+      - "Approval of new data source connections and scope expansion requests"
+
+  technical_owner:
+    name: Sam Rivera
+    role: "Platform Engineer"
+    email: sam.rivera@example.com
+    accountability:
+      - "Build quality, testing, and deployment of the internal tool agent"
+      - "Runtime behavior monitoring and quality of responses"
+      - "Ensuring read-only authority and data access restrictions are enforced in production code"
+      - "Maintaining runbook and incident response procedures"
+
+  escalation_path:
+    - level: 1
+      name: Aisha Patel
+      email: aisha.patel@example.com
+      role: Engineering Lead
+    - level: 2
+      name: Kevin O'Brien
+      email: kevin.obrien@example.com
+      role: IT Director
+
+# =============================================================================
+# BOUNDARY 3: AUTHORITY
+# =============================================================================
+authority:
+  autonomous_decisions:
+    - decision_type: search_internal_documentation
+      description: >
+        Search the internal documentation search index and return relevant results
+        to the requesting engineer. No approval required. Read-only operation.
+        Results are informational only — engineers decide whether to apply the information.
+    - decision_type: summarize_pr_diff
+      description: >
+        Read and summarize pull request diffs and README files from approved internal
+        GitHub repositories. No approval required. Read-only operation. Summaries
+        are informational — engineers review and apply their own judgment.
+    - decision_type: answer_api_question
+      description: >
+        Answer questions about internal APIs using the approved API spec registry
+        knowledge base. No approval required. Read-only operation. Answers are
+        informational — engineers validate against official documentation before applying.
+
+  escalation_triggers:
+    - "Query requires access to data classified above internal — agent must decline and alert domain_owner"
+    - "User requests an action outside read-only scope (e.g., asking agent to execute code or write to a system)"
+    - "Repeated hallucination pattern detected — technical_owner alerted for quality review"
+
+  prohibited_actions:
+    - "Cannot write to any system under any circumstances — text generation and retrieval only"
+    - "Cannot access data classified above internal, including customer data, financial records, or HR systems"
+    - "Cannot execute code, run shell commands, or invoke any production system API with side effects"
+    - "Cannot access customer PII or personally identifiable information of any kind"
+
+  override_mechanism:
+    who_can_pause:
+      - role: "Engineering Manager (domain_owner)"
+        method: "Platform dashboard kill switch — disables new query processing within 60 minutes"
+        sla_minutes: 60
+      - role: "Technical owner (Sam Rivera)"
+        method: "Control plane feature flag — pauses agent within 15 minutes"
+        sla_minutes: 15
+    who_can_override: "Engineering Manager"
+
+# =============================================================================
+# BOUNDARY 4: DATA
+# =============================================================================
+data:
+  permitted_sources:
+    - source: "Internal Documentation Search Index"
+      access_level: read
+      reason: "Primary knowledge source for answering documentation queries from engineering teams."
+    - source: "GitHub Internal Repositories"
+      fields:
+        - pr_diffs
+        - readme_files
+      access_level: read
+      reason: "Pull request diffs and README files only. No access to production code secrets or credentials."
+    - source: "API Spec Registry"
+      access_level: read
+      reason: "Internal API specifications and documentation for answering API usage questions."
+
+  prohibited_sources:
+    - "Customer databases or any data source containing customer PII"
+    - "Financial records, accounts payable, or general ledger systems"
+    - "HR systems, compensation data, or employee personal information"
+    - "Production data stores, live database connections, or any system classified above internal"
+    - "Any data source not listed in permitted_sources above"
+
+  sensitive_data_handling:
+    must_mask:
+      - employee_email
+    must_encrypt_in_transit: true
+    cannot_retain: true
+    retention_policy: >
+      Query logs retained 90 days for quality monitoring and hallucination detection
+      only, then automatically purged per internal data minimization policy. No
+      long-term retention of query content or agent responses. Logs do not contain
+      customer data or data classified above internal.
+
+# =============================================================================
+# BOUNDARIES 5 & 8: INCIDENT RESPONSE
+# =============================================================================
+incident_response:
+  investigator_primary: "technical_owner (Sam Rivera)"
+  investigator_secondary: "domain_owner (David Wu)"
+  log_access:
+    - "technical_owner"
+    - "Platform Engineering On-Call"
+    - "domain_owner (read-only, for business impact assessment)"
+  investigation_scope:
+    - "What query produced incorrect, harmful, or misleading output that affected engineering team decisions?"
+    - "Did the agent access any data source outside its declared permitted_sources or above the internal classification?"
+    - "Were any users misled by incorrect information that caused production issues or security concerns?"
+  communication:
+    customer_owner: "domain_owner (David Wu) — coordinates with engineering team leads on impact"
+    stakeholder_owner: "domain_owner — briefs Engineering Lead and IT Director on scope of any misuse"
+    compliance_owner: "technical_owner — determines whether any internal policy obligations were triggered"
+  post_incident_review:
+    required: false
+    sla_days: 10
+    participants:
+      - domain_owner
+      - technical_owner
+
+# =============================================================================
+# GOVERNANCE
+# =============================================================================
+governance:
+  review_cadence: annually
+  approval_required_for:
+    - "New data source access (any addition to permitted_sources)"
+    - "Scope expansion beyond current read-only developer experience tasks"
+    - "Integration with external services or data sources classified above internal"
+  change_control_board: "Platform Engineering Tech Lead Group"
+  last_reviewed: "2025-10-15"
+  next_review: "2026-10-15"
+
+# =============================================================================
+# BOUNDARY 6: LIFECYCLE
+# =============================================================================
+lifecycle:
+  status: active
+  deployed_at: "2025-10-15"
+  versioning:
+    all_changes_require_approval: true
+    material_change_definition:
+      - "Any change to permitted data sources"
+      - "Any addition of write capability"
+      - "Scope expansion beyond internal tooling"
+      - "Change in ownership roles"
+  monitoring:
+    real_time_metrics:
+      - "Query resolution rate (alert if drops below 70%)"
+      - "Developer satisfaction score rolling 30-day average (alert if below 3.5/5)"
+      - "Hallucination detection flag rate (alert if exceeds 3% of queries)"
+      - "Data source access error rate (alert if > 2%)"
+    review_frequency_days: 90
+  retirement:
+    criteria:
+      - "Next-generation internal developer platform reaches production stability"
+      - "Engineering team migrated to the replacement documentation and API tooling"
+    planned_review_date: "2027-10-01"
+
+# =============================================================================
+# COMPLIANCE
+# =============================================================================
+compliance:
+  frameworks:
+    - internal-policy
+  data_classification: internal
+  pii_handling: >
+    Agent accesses only internal engineering documentation, code diffs, and API
+    specifications. No customer PII is accessible. Engineer names and email addresses
+    may appear in code commit history and PR diffs and are treated as internal data,
+    masked in query logs per internal data minimization policy.
+  audit_log_required: false
+  retention_policy: >
+    Agent interaction logs retained for 90 days for debugging and quality monitoring
+    purposes only. No long-term retention required. Logs purged automatically after
+    90 days per internal data minimization policy. No customer data or data classified
+    above internal is ever processed by this agent.
+
+# =============================================================================
+# RISK
+# =============================================================================
+risk:
+  risk_tier: low
+  blast_radius: >
+    A malfunction would at worst produce incorrect or low-quality documentation
+    summaries and API answers, causing engineering productivity loss and potential
+    developer confusion. No customer impact, no financial exposure, and no regulatory
+    implications. Affected engineers would fall back to manual documentation search.
+    Recovery is immediate upon restart. Worst case: a misleading API answer causes
+    an engineer to implement an integration incorrectly, caught in code review before
+    reaching production.
+  human_in_the_loop_required: false
+  kill_switch_owner: david.wu@example.com
+
+# =============================================================================
+# BOUNDARY 7: SIGNOFF
+# =============================================================================
+signoff:
+  domain_owner:
+    name: David Wu
+    date: "2026-04-01"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the internal tool
+      agent's business purpose, read-only authority boundaries, and data access scope.
+      I confirm the agent is limited to internal documentation sources only and has
+      no access to customer data, financial systems, or data classified above internal.
+      I accept business accountability for the agent's responses to engineering team queries.
+  technical_owner:
+    name: Sam Rivera
+    date: "2026-04-01"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the internal tool
+      agent's build quality, runtime behavior, and operational readiness. I confirm
+      that read-only access is enforced across all data sources, that the agent has
+      no write capability in any environment, and that all data access is scoped to
+      permitted_sources only. Query logs do not contain customer data.
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+dependencies:
+  models:
+    - name: Developer Tool LLM
+      version: "gpt-4o-mini-2024-07-18"
+      type: llm
+      description: "Generates documentation search summaries, PR diff summaries, and API question answers."
+  services:
+    - name: GitHub Enterprise API
+      version: "v3"
+      type: rest-api
+      description: "Read-only access to internal repositories for PR diffs and README content."
+    - name: Internal Wiki API
+      version: "v2"
+      type: rest-api
+      description: "Read-only access to Confluence engineering documentation search index."
+  data_sources:
+    - name: Internal Code Repositories
+      type: git
+      description: "Read-only access to internal engineering repositories. No production data, secrets, or customer data."
+    - name: API Spec Registry
+      type: postgresql
+      description: "Internal API specifications database. Read-only access for answering API usage questions."
+
+# =============================================================================
+# SLA
+# =============================================================================
+sla:
+  availability: 95.0
+  max_latency_ms: 5000
+  error_rate_threshold: "2%"
+  throughput_limit: "200 req/hour"

@@ -1,0 +1,357 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) v1
+# Example: Operations Workflow Agent
+#
+# Domain: Operations
+# Risk Tier: Medium | Type: Hybrid | Compliance: SOX
+# Owner: Robert Martinez
+#
+# 8-Boundary governance coverage:
+#   1. Purpose       — automate internal operations workflows, bounded to draft/trigger only
+#   2. Ownership     — Robert Martinez (domain), Kevin Lee (technical), 2-level escalation
+#   3. Authority     — trigger reorders, draft POs under $10K; human approval above $10K
+#   4. Data          — inventory DB, supplier catalog, shipment events; prohibited: HR, PII
+#   5. Evidence      — technical_owner investigates, workflow action logs, ops system access
+#   6. Lifecycle     — active, quarterly monitoring review, workflow playbook retirement criteria
+#   7. Approval      — domain_owner and technical_owner sign-off required pre-launch
+#   8. Failure Acct  — domain_owner communicates to stakeholders and compliance
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+
+metadata:
+  name: operations-agent
+  version: 1.3.0
+  created: "2025-06-01"
+  updated: "2026-02-01"
+  labels:
+    env: production
+    team: operations-platform
+    domain: workflow-automation
+  annotations:
+    jira-epic: "OPS-882"
+    confluence-page: "https://wiki.example.com/display/OPS/operations-agent"
+    runbook-url: "https://wiki.example.com/display/OPS/operations-agent-runbook"
+    oncall-schedule: "https://pagerduty.example.com/schedules/OPS-ONCALL"
+
+agent:
+  id: operations-agent
+  name: Operations Workflow Agent
+  description: >
+    Automates routine internal operations workflows including purchase order drafting,
+    inventory reorder triggering, and shipment delay triage. Initiates predefined
+    workflow actions within approved parameters. Requires human approval for purchase
+    orders above $10,000. Does not submit supplier communications without human
+    review, does not access financial ledger systems, and does not modify supplier
+    contracts or pricing terms.
+  type: hybrid
+  domain: operations
+  tags:
+    - workflow-automation
+    - vendor-management
+    - inventory
+    - internal
+    - purchase-orders
+
+# =============================================================================
+# BOUNDARY 1: PURPOSE
+# =============================================================================
+purpose:
+  business_purpose: >
+    Automates routine internal operations workflows including purchase order drafting,
+    inventory reorder triggering, and shipment delay triage. Initiates predefined
+    workflow actions within approved parameters. This agent reduces manual operations
+    team workload for repetitive workflow tasks that previously required 15-30 minutes
+    of human effort per occurrence, enabling the operations team to focus on
+    exception handling and supplier relationship management.
+  success_metrics:
+    workflow_automation_rate: "85%"
+    manual_review_escalation_rate: "<15%"
+    po_draft_accuracy: ">98%"
+  out_of_scope:
+    - "Cannot submit purchase orders without human approval for orders above $10,000"
+    - "Cannot modify supplier contracts or pricing terms under any circumstances"
+    - "Cannot access financial ledger systems directly — purchase order submission is a human-only action"
+
+# =============================================================================
+# BOUNDARY 2: OWNERSHIP
+# =============================================================================
+ownership:
+  domain_owner:
+    name: Robert Martinez
+    role: "VP Operations"
+    email: robert.martinez@example.com
+    accountability:
+      - "Business outcome for internal workflow automation and operational efficiency"
+      - "Scope decisions for operational tool access and workflow playbook approvals"
+      - "Approval of changes to workflow playbooks and purchase order thresholds"
+
+  technical_owner:
+    name: Kevin Lee
+    role: "Platform Engineering Lead"
+    email: kevin.lee@example.com
+    accountability:
+      - "Build quality, testing, and deployment of the operations workflow agent"
+      - "Runtime behavior monitoring and SLA compliance for workflow execution"
+      - "Ensuring authority limits and data access restrictions are enforced in production code"
+      - "Maintaining runbook and incident response procedures"
+
+  escalation_path:
+    - level: 1
+      name: Angela Foster
+      email: angela.foster@example.com
+      role: Engineering Manager
+    - level: 2
+      name: Thomas Burke
+      email: thomas.burke@example.com
+      role: Operations Director
+
+# =============================================================================
+# BOUNDARY 3: AUTHORITY
+# =============================================================================
+authority:
+  autonomous_decisions:
+    - decision_type: trigger_inventory_reorder
+      description: >
+        Automatically trigger an inventory reorder workflow when SKU quantity falls
+        below the configured reorder threshold. No human approval required. The reorder
+        is a workflow trigger — final purchase order submission requires human approval
+        above $10,000. Below-threshold reorders are auto-drafted and submitted directly.
+    - decision_type: draft_purchase_order
+      limit: 10000
+      currency: USD
+      requires_approval: false
+      description: >
+        Draft and submit purchase orders for amounts under $10,000 without human
+        approval. Draft accuracy is validated against supplier catalog pricing before
+        submission. All submitted POs are logged to the audit trail.
+    - decision_type: triage_shipment_delay
+      description: >
+        Classify inbound shipment delay events and route them to the appropriate
+        operations team queue. No human approval required for classification and routing.
+        The agent does not contact suppliers directly — it routes to the human ops team.
+
+  escalation_triggers:
+    - "Purchase order total exceeds $10,000 — requires human manager approval before submission"
+    - "Unrecognized workflow scenario not covered by an approved playbook"
+    - "Supplier system returns an error code not in the known-error resolution list"
+    - "API rate limit exceeded — agent pauses and alerts engineering on-call"
+
+  prohibited_actions:
+    - "Cannot submit supplier communications without human review and explicit approval"
+    - "Cannot modify the approved vendor list or supplier contract terms"
+    - "Cannot access accounts payable or financial ledger systems directly"
+
+  override_mechanism:
+    who_can_pause:
+      - role: "VP Operations (domain_owner)"
+        method: "Operations console kill switch — disables new workflow initiation within 30 minutes"
+        sla_minutes: 30
+      - role: "Engineering Lead (technical_owner)"
+        method: "Control plane feature flag — pauses agent within 5 minutes"
+        sla_minutes: 5
+    who_can_override: "Director of Operations"
+
+# =============================================================================
+# BOUNDARY 4: DATA
+# =============================================================================
+data:
+  permitted_sources:
+    - source: "Inventory Database"
+      fields:
+        - sku
+        - quantity
+        - reorder_point
+      access_level: read
+      reason: "Core data source for inventory level monitoring and reorder threshold checks."
+    - source: "Supplier Catalog"
+      access_level: read
+      reason: "Supplier pricing and product catalog for purchase order draft accuracy validation."
+    - source: "Shipment Events Stream"
+      access_level: read
+      reason: "Inbound shipment event stream for delay detection and triage classification."
+    - source: "Purchase Order Draft System"
+      access_level: write
+      reason: "Writes draft purchase orders for human review and final submission."
+
+  prohibited_sources:
+    - "Employee compensation data, salary records, or HR performance data"
+    - "Customer PII or customer-facing databases of any kind"
+    - "Financial statements, accounts payable, or general ledger systems"
+    - "HR records or employee personal information"
+
+  sensitive_data_handling:
+    must_mask:
+      - supplier_contact_email
+    must_encrypt_in_transit: true
+    cannot_retain: false
+    retention_policy: >
+      Workflow action logs retained 7 years per SOX Section 802 requirements.
+      Purchase order drafts retained for 3 years per operational policy. Inventory
+      event logs retained for 2 years. All financial workflow records stored in
+      immutable audit storage.
+
+# =============================================================================
+# BOUNDARIES 5 & 8: INCIDENT RESPONSE
+# =============================================================================
+incident_response:
+  investigator_primary: "technical_owner (Kevin Lee)"
+  investigator_secondary: "domain_owner (Robert Martinez)"
+  log_access:
+    - "technical_owner"
+    - "Operations Platform On-Call Engineer"
+    - "domain_owner (read-only, for business impact assessment)"
+  investigation_scope:
+    - "What workflow action was triggered incorrectly, and what system state caused it?"
+    - "What is the financial or operational impact — were any purchase orders submitted incorrectly?"
+    - "Were any unauthorized supplier communications sent without required human review?"
+    - "Did the agent stay within its declared purchase order authority limit of $10,000?"
+  communication:
+    customer_owner: "domain_owner (Robert Martinez) — coordinates with operations leadership"
+    stakeholder_owner: "domain_owner — briefs Director of Operations and executive leadership on impact"
+    compliance_owner: "technical_owner — determines whether SOX audit trail obligations were affected"
+  post_incident_review:
+    required: true
+    sla_days: 5
+    participants:
+      - domain_owner
+      - technical_owner
+      - "Operations Platform On-Call Engineer"
+      - "Finance representative if purchase order errors occurred"
+
+# =============================================================================
+# GOVERNANCE
+# =============================================================================
+governance:
+  review_cadence: quarterly
+  approval_required_for:
+    - "New workflow playbook addition or modification to existing playbook"
+    - "Purchase order autonomous limit change (currently $10,000)"
+    - "New supplier system connection or API integration"
+    - "Model or prompt changes affecting workflow classification"
+  change_control_board: "Operations Risk and Technology Committee"
+  last_reviewed: "2025-11-01"
+  next_review: "2026-02-01"
+
+# =============================================================================
+# BOUNDARY 6: LIFECYCLE
+# =============================================================================
+lifecycle:
+  status: active
+  deployed_at: "2025-07-01"
+  versioning:
+    all_changes_require_approval: true
+    material_change_definition:
+      - "Change to purchase order autonomous limit"
+      - "Adding or removing workflow playbooks"
+      - "Adding new supplier system integration"
+      - "Change in ownership roles"
+  monitoring:
+    real_time_metrics:
+      - "Workflow automation rate (alert if drops below 75%)"
+      - "PO draft accuracy (alert if below 95%)"
+      - "Manual escalation rate (alert if exceeds 20%)"
+      - "API error rate per supplier system (alert if > 1%)"
+    review_frequency_days: 30
+  retirement:
+    criteria:
+      - "Next-generation ERP workflow automation reaches production stability"
+      - "All active workflow playbooks migrated to the replacement system"
+    planned_review_date: "2027-01-01"
+
+# =============================================================================
+# COMPLIANCE
+# =============================================================================
+compliance:
+  frameworks:
+    - SOX
+  data_classification: internal
+  pii_handling: >
+    Agent processes vendor contact information (supplier email addresses) as part
+    of workflow routing. No customer PII is accessible. Vendor data is handled per
+    supplier agreements and internal data governance policy. Supplier contact
+    details are masked in audit logs and not retained by the agent beyond the
+    active workflow session.
+  audit_log_required: true
+  retention_policy: >
+    Workflow execution logs and audit records retained for 7 years per SOX
+    Section 802 requirements. Vendor communication drafts retained for 3 years.
+    Inventory event logs retained for 2 years per operational policy.
+
+# =============================================================================
+# RISK
+# =============================================================================
+risk:
+  risk_tier: medium
+  blast_radius: >
+    A malfunction in workflow initiation could result in duplicate purchase orders,
+    missed replenishment alerts, or delayed supplier communications across all active
+    vendors, estimated at 200-400 vendors. Financial exposure is limited by the
+    human approval gate for all purchase orders above $10,000. Worst case: duplicate
+    PO drafts requiring manual review and cancellation, with recovery estimated at
+    4-8 hours using existing runbook procedures. No customer-facing impact.
+  human_in_the_loop_required: true
+  kill_switch_owner: robert.martinez@example.com
+
+# =============================================================================
+# BOUNDARY 7: SIGNOFF
+# =============================================================================
+signoff:
+  domain_owner:
+    name: Robert Martinez
+    date: "2026-02-01"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the operations
+      workflow agent's business purpose, workflow automation boundaries, and purchase
+      order authority limits. I confirm that the $10,000 autonomous PO limit is
+      appropriate and that human approval is required above this threshold. I accept
+      business accountability for the agent's decisions in operational workflows.
+  technical_owner:
+    name: Kevin Lee
+    date: "2026-02-01"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the operations
+      workflow agent's build quality, runtime behavior, and operational readiness.
+      I confirm the $10,000 purchase order limit and all prohibited actions are
+      enforced in production code, and that data access is scoped to permitted_sources
+      only. The kill switch mechanism has been tested with the declared 5-minute SLA.
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+dependencies:
+  models:
+    - name: Operations LLM
+      version: "gpt-4o-mini-2024-07-18"
+      type: llm
+      description: "Used for document parsing, workflow classification, and purchase order draft generation."
+  services:
+    - name: ERP System
+      version: "v12.4"
+      type: internal-api
+      description: "Enterprise resource planning — inventory data, PO drafting, vendor records."
+    - name: Vendor Portal API
+      version: "v3.1"
+      type: rest-api
+      description: "Reads vendor catalog updates and submits communication drafts for human review."
+    - name: Approval Workflow Service
+      version: "v2.0"
+      type: internal-api
+      description: "Routes initiated workflows to human approvers via email and Slack notifications."
+  data_sources:
+    - name: Inventory Database
+      type: postgresql
+      description: "Read access to inventory levels, reorder points, and SKU metadata."
+    - name: Shipment Events Stream
+      type: kafka
+      description: "Real-time shipment event stream for delay detection and triage classification."
+
+# =============================================================================
+# SLA
+# =============================================================================
+sla:
+  availability: 99.5
+  max_latency_ms: 30000
+  error_rate_threshold: "1%"
+  throughput_limit: "500 workflows/hour"

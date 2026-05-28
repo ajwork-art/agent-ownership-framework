@@ -1,0 +1,376 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) v1
+# Example: Fraud Detection Agent
+#
+# Domain: Financial Services
+# Risk Tier: Critical | Type: Autonomous | Compliance: PCI-DSS, BSA-AML, SOX, GLBA
+# Owner: Michael Chang
+#
+# 8-Boundary governance coverage:
+#   1. Purpose       — real-time fraud scoring, bounded to score-only (never block)
+#   2. Ownership     — Michael Chang (domain), Priya Sharma (technical), 3-level escalation
+#   3. Authority     — autonomous scoring, flag high-confidence cases, no block authority
+#   4. Data          — tokenized transaction stream, velocity features; prohibited: raw PAN
+#   5. Evidence      — technical_owner investigates, ML logs, scoring ledger access
+#   6. Lifecycle     — active, monthly monitoring review, model drift retirement criteria
+#   7. Approval      — domain_owner and technical_owner sign-off required pre-launch
+#   8. Failure Acct  — domain_owner communicates to regulators, risk_owner to compliance
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+
+metadata:
+  name: fraud-detection-agent
+  version: 3.0.1
+  created: "2024-11-01"
+  updated: "2026-01-15"
+  labels:
+    env: production
+    team: risk-engineering
+    criticality: tier-1
+    pci-scope: "true"
+  annotations:
+    jira-epic: "RISK-2201"
+    runbook: "https://wiki.example.com/display/RISK/fraud-agent-runbook"
+    incident-bridge: "https://pagerduty.example.com/services/PFRAUD01"
+    model-card: "https://mlflow.example.com/models/fraud-scorer/v3"
+
+agent:
+  id: fraud-detection-agent
+  name: Fraud Detection Agent
+  description: >
+    Real-time fraud scoring for card-present and card-not-present transactions.
+    Processes each transaction through a multi-signal fraud model, returning a
+    risk score (0.0-1.0) and categorical risk label (low/medium/high/critical)
+    within 150ms. The agent scores transactions only — it does not block, approve,
+    or modify transactions. Blocking decisions are made by a separate downstream
+    authorization engine that consumes the agent's scores. Processes approximately
+    4 million transactions per day at peak volume.
+  type: autonomous
+  domain: financial-services
+  tags:
+    - fraud
+    - real-time
+    - scoring
+    - pci-scope
+    - financial-crime
+    - ml-inference
+
+# =============================================================================
+# BOUNDARY 1: PURPOSE
+# =============================================================================
+purpose:
+  business_purpose: >
+    Real-time fraud scoring for all card transactions across the payment network.
+    Generates a fraud probability score (0.0-1.0) and risk label consumed by the
+    downstream authorization engine which makes final block/allow decisions. The
+    agent's scoring capability replaces manual rule-only approaches, enabling
+    detection of sophisticated fraud patterns at transaction volume and latency
+    that no rules-only system can match. The agent never blocks — it informs.
+  success_metrics:
+    false_negative_rate: "<0.5%"
+    false_positive_rate: "<2%"
+    latency_p99_ms: 150
+  out_of_scope:
+    - "Cannot block or approve transactions directly — scoring output is consumed by the authorization engine"
+    - "Cannot modify account settings or cardholder records of any kind"
+    - "Cannot initiate customer communications, chargebacks, or dispute filings"
+
+# =============================================================================
+# BOUNDARY 2: OWNERSHIP
+# =============================================================================
+ownership:
+  domain_owner:
+    name: Michael Chang
+    role: "VP Risk Engineering"
+    email: michael.chang@example.com
+    accountability:
+      - "Business outcome for fraud prevention platform and overall scoring accuracy"
+      - "Risk acceptance for autonomous scoring decisions made without human review"
+      - "Regulatory exposure for PCI-DSS and BSA-AML obligations tied to fraud data"
+
+  technical_owner:
+    name: Priya Sharma
+    role: "Engineering Lead, Fraud Systems"
+    email: priya.sharma@example.com
+    accountability:
+      - "Build quality, ML pipeline integrity, and deployment of the fraud scoring agent"
+      - "Runtime behavior monitoring, model drift detection, and SLA compliance"
+      - "Ensuring authority limits and data access restrictions are enforced in production code"
+      - "Maintaining the runbook and incident response procedures"
+
+  escalation_path:
+    - level: 1
+      name: Daniel Osei
+      email: daniel.osei@example.com
+      role: Fraud Ops Director
+    - level: 2
+      name: Jennifer Walsh
+      email: jennifer.walsh@example.com
+      role: CTO
+    - level: 3
+      name: Patricia Nguyen
+      email: patricia.nguyen@example.com
+      role: CEO/Board Representative
+
+# =============================================================================
+# BOUNDARY 3: AUTHORITY
+# =============================================================================
+authority:
+  autonomous_decisions:
+    - decision_type: score_transaction
+      description: >
+        Score any card transaction in real time by processing tokenized transaction
+        signals through the fraud model. No approval required. No transaction volume
+        limit. Returns a probability score (0.0-1.0) and categorical label. The agent
+        does not decide outcomes — it produces scores consumed by the authorization engine.
+    - decision_type: flag_high_confidence_case
+      description: >
+        Automatically flag transactions with a fraud score above 0.92 to the Fraud
+        Ops queue for analyst review. Threshold is 0.92 per governance approval. No
+        human approval required to flag — the flag is informational and does not block
+        the transaction. The authorization engine makes the final block/allow decision.
+
+  escalation_triggers:
+    - "Fraud score exceeds 0.92 on a high-value transaction (amount > $5,000)"
+    - "Model drift detected — score distribution shifts outside control bounds"
+    - "Agent error rate exceeds 0.1% over a 5-minute rolling window"
+
+  prohibited_actions:
+    - "Cannot block or approve transactions directly — blocking authority belongs to the authorization engine only"
+    - "Cannot access raw cardholder PAN, CVV, or full magnetic stripe data under any circumstances"
+    - "Cannot modify transaction records, account settings, or cardholder data in any system"
+
+  override_mechanism:
+    who_can_pause:
+      - role: "VP Risk Engineering (domain_owner)"
+        method: "Control plane dashboard kill switch — pauses scoring pipeline within 2 minutes"
+        sla_minutes: 2
+      - role: "Security team (automated detection)"
+        method: "Auto-detection circuit breaker — triggers if anomaly score exceeds threshold"
+        sla_minutes: 5
+    who_can_override: "Chief Risk Officer"
+
+# =============================================================================
+# BOUNDARY 4: DATA
+# =============================================================================
+data:
+  permitted_sources:
+    - source: "Transaction Event Stream"
+      fields:
+        - tokenized_card_id
+        - merchant_id
+        - amount
+        - timestamp
+      access_level: read
+      reason: "Primary input stream for real-time scoring. Tokenized card references only — no raw PAN."
+    - source: "Velocity Feature Store"
+      access_level: read
+      time_window_days: 90
+      reason: "Precomputed velocity features: transaction count and amount aggregates per token per time window."
+    - source: "Merchant Risk Registry"
+      access_level: read
+      reason: "Merchant risk profiles and historical fraud rates used as scoring signals."
+    - source: "Fraud Score Ledger"
+      access_level: write
+      reason: "Write-only output destination for publishing fraud scores consumed by the authorization engine."
+
+  prohibited_sources:
+    - "Raw cardholder PAN database — tokenization handled upstream; agent receives token references only"
+    - "Customer PII (names, addresses, phone numbers) — not required for scoring and not permitted"
+    - "Account balance data or credit limit information"
+    - "Other customers' full transaction history — only aggregated velocity features permitted"
+
+  sensitive_data_handling:
+    must_mask:
+      - card_number
+      - cardholder_name
+    must_encrypt_in_transit: true
+    cannot_retain: true
+    retention_policy: >
+      Scoring logs retained 5 years per BSA record retention requirements.
+      Raw transaction payloads not retained by the agent — scoring is performed
+      in-memory and only the score output is written to the fraud score ledger.
+      Audit access logs retained 7 years per PCI-DSS Requirement 10.7.
+
+# =============================================================================
+# BOUNDARIES 5 & 8: INCIDENT RESPONSE
+# =============================================================================
+incident_response:
+  investigator_primary: "technical_owner (Priya Sharma)"
+  investigator_secondary: "Fraud Platform On-Call Engineer"
+  log_access:
+    - "technical_owner"
+    - "Fraud Platform On-Call Engineer"
+    - "domain_owner (read-only, for business impact and regulatory exposure assessment)"
+    - "Chief Risk Officer (read-only, for critical-tier incidents)"
+  investigation_scope:
+    - "What transactions were scored incorrectly, and what fraud probability scores were assigned?"
+    - "What signals or model features caused the incorrect score to be produced?"
+    - "What was the downstream authorization outcome — were fraudulent transactions approved or legitimate transactions declined?"
+    - "Which customers were affected and what is the estimated financial exposure from incorrect scoring decisions?"
+    - "Was any raw cardholder PAN or prohibited data accessed or exposed during or before the incident?"
+  communication:
+    customer_owner: "domain_owner (Michael Chang) — coordinates cardholder notifications with Customer Experience"
+    stakeholder_owner: "domain_owner — briefs Fraud Ops Director, CTO, and executive leadership on business impact"
+    compliance_owner: "risk_owner (Compliance Lead) — determines PCI-DSS and BSA-AML disclosure obligations"
+  post_incident_review:
+    required: true
+    sla_days: 2
+    participants:
+      - domain_owner
+      - technical_owner
+      - "Fraud Platform On-Call Engineer"
+      - "Compliance Lead representative"
+      - "Authorization engine owner for downstream impact assessment"
+
+# =============================================================================
+# GOVERNANCE
+# =============================================================================
+governance:
+  review_cadence: monthly
+  approval_required_for:
+    - "Model version change or fraud scoring model retraining"
+    - "Scoring threshold change (high-confidence flag threshold or model decision boundary)"
+    - "New data source or feature signal added to the scoring pipeline"
+    - "Scope expansion beyond card transaction scoring (e.g., ACH, wire, new payment types)"
+  change_control_board: "Financial Crime Risk Committee"
+  last_reviewed: "2026-01-10"
+  next_review: "2026-02-10"
+
+# =============================================================================
+# BOUNDARY 6: LIFECYCLE
+# =============================================================================
+lifecycle:
+  status: active
+  deployed_at: "2024-12-01"
+  versioning:
+    all_changes_require_approval: true
+    material_change_definition:
+      - "Any change to scoring thresholds (high-confidence flag threshold)"
+      - "Model version update or retraining on new data"
+      - "Adding or removing permitted data sources"
+      - "Change in ownership roles"
+  monitoring:
+    real_time_metrics:
+      - "Score distribution by risk label (alert if high/critical bucket > 3x baseline)"
+      - "Scoring latency p99 (alert if > 150ms)"
+      - "Model drift indicator — population stability index (alert if PSI > 0.2)"
+      - "Error rate per 5-minute window (alert if > 0.1%)"
+    review_frequency_days: 7
+  retirement:
+    criteria:
+      - "Next-generation fraud scoring model reaches production stability for 90 days"
+      - "Authorization engine migrated to consume scores from replacement model"
+    planned_review_date: "2027-06-01"
+
+# =============================================================================
+# COMPLIANCE
+# =============================================================================
+compliance:
+  frameworks:
+    - PCI-DSS
+    - BSA-AML
+    - SOX
+    - GLBA
+  data_classification: highly-restricted
+  pii_handling: >
+    The agent receives tokenized transaction identifiers only. Cardholder names,
+    full PAN, CVV, and billing addresses are never accessible to this agent.
+    Tokenization is handled upstream by the PCI-DSS Level 1 certified token vault.
+    All fraud scores are associated with token references, not raw customer identifiers.
+    Score explanations contain no PII. Access to fraud score output requires
+    Role: FRAUD_ANALYST or higher.
+  audit_log_required: true
+  retention_policy: >
+    Transaction fraud scores and model inputs retained for 7 years per BSA-AML
+    requirements and SOX Section 802. Raw model inference logs retained for 2 years.
+    Audit access logs (who viewed fraud data) retained for 7 years. All retained
+    data stored in WORM (write-once read-many) audit storage per PCI-DSS Requirement 10.7.
+
+# =============================================================================
+# RISK
+# =============================================================================
+risk:
+  risk_tier: critical
+  blast_radius: >
+    A scoring failure or model compromise could affect all card transactions
+    platform-wide. At 4M transactions/day, a complete scoring outage for 1 hour
+    would leave approximately 166,000 transactions unscored, forcing the authorization
+    engine to fall back to static rules with significantly higher false-positive rates,
+    increasing declined legitimate transactions and customer friction. A systematic
+    scoring bias (model drift or adversarial attack) could allow fraud to pass undetected
+    at scale, with potential financial losses in the tens of millions before detection.
+    A data breach of the fraud scoring infrastructure would trigger PCI-DSS incident
+    reporting obligations to card networks and BSA-AML notification requirements.
+  human_in_the_loop_required: false
+  kill_switch_owner: michael.chang@example.com
+
+# =============================================================================
+# BOUNDARY 7: SIGNOFF
+# =============================================================================
+signoff:
+  domain_owner:
+    name: Michael Chang
+    date: "2026-01-15"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the fraud detection
+      agent's business purpose, scoring authority boundaries, and regulatory exposure.
+      I confirm the agent is authorized to score transactions autonomously without
+      human-in-the-loop review, and I accept that this design decision is appropriate
+      given the 150ms latency requirement and the safeguard that the agent scores only
+      and never blocks or approves transactions directly.
+  technical_owner:
+    name: Priya Sharma
+    date: "2026-01-15"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the fraud detection
+      agent's build quality, runtime behavior, and operational readiness. I confirm
+      that the scoring-only authority limit is enforced in production code, that the
+      agent has no write access to transaction records, and that all data access is
+      scoped to permitted_sources only. The kill switch mechanism has been tested and
+      validated with a 2-minute SLA.
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+dependencies:
+  models:
+    - name: Fraud Scoring Model
+      version: "v3.2.1"
+      type: ml-model
+      description: "XGBoost ensemble model for real-time transaction fraud scoring. Trained on 18 months of transaction history."
+    - name: Fraud Narrative LLM
+      version: "gpt-4o-mini-2024-07-18"
+      type: llm
+      description: "Generates human-readable fraud signal explanations for Fraud Ops analyst review. Used for P1/P2 cases only."
+  services:
+    - name: Transaction Event Stream
+      version: "kafka-3.6"
+      type: kafka
+      description: "Real-time transaction event stream. Agent subscribes as a consumer group."
+    - name: Token Vault Service
+      version: "v5.1"
+      type: internal-api
+      description: "PCI-DSS Level 1 certified token vault. Agent receives only masked token references from this service."
+    - name: Fraud Score Ledger
+      version: "v2.4"
+      type: internal-api
+      description: "Write-only service for publishing fraud scores. Downstream authorization engine reads from this ledger."
+  data_sources:
+    - name: Merchant Risk Database
+      type: postgresql
+      description: "Read-only access to merchant risk profiles and historical fraud rates by merchant category code."
+    - name: Velocity Feature Store
+      type: redis
+      description: "Real-time velocity features: transaction count and amount aggregates per token per time window."
+
+# =============================================================================
+# SLA
+# =============================================================================
+sla:
+  availability: 99.99
+  max_latency_ms: 150
+  error_rate_threshold: "0.01%"
+  throughput_limit: "100000 req/min"
