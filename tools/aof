@@ -1,0 +1,713 @@
+#!/usr/bin/env python3
+"""
+aof — Agent Ownership Framework CLI
+
+Three commands that make working with AOF contracts fast and friendly:
+
+    aof validate <file> [file ...]   Validate contract(s) against the JSON Schema
+    aof create <name.yaml>           Create a new contract from the template
+    aof check <file.yaml>            Check all eight governance boundaries
+
+Usage without installation:
+    python tools/aof validate my-agent.yaml
+    python tools/aof create my-payment-agent.yaml
+    python tools/aof check my-agent.yaml
+
+After `pip install -e tools/`:
+    aof validate my-agent.yaml
+    aof create my-payment-agent.yaml
+    aof check my-agent.yaml
+
+Exit codes:
+    0  all checks passed
+    1  one or more checks failed
+
+Author: Anitha Jagadeesh — Enterprise Data AI Realities
+License: MIT
+"""
+
+import argparse
+import importlib.util
+import os
+import shutil
+import sys
+from typing import Any, Dict, List, Tuple
+
+
+# =============================================================================
+# Color output — ANSI codes, auto-disabled on non-TTY terminals and Windows
+# pipes so CI output stays clean.
+# =============================================================================
+
+_COLOR = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+RESET  = "\033[0m"  if _COLOR else ""
+BOLD   = "\033[1m"  if _COLOR else ""
+DIM    = "\033[2m"  if _COLOR else ""
+GREEN  = "\033[92m" if _COLOR else ""
+RED    = "\033[91m" if _COLOR else ""
+YELLOW = "\033[93m" if _COLOR else ""
+
+
+def _ok(msg: str)   -> str: return f"{GREEN}✓{RESET} {msg}"
+def _fail(msg: str) -> str: return f"{RED}✗{RESET} {msg}"
+def _warn(msg: str) -> str: return f"{YELLOW}!{RESET} {msg}"
+
+
+# =============================================================================
+# Path resolution — everything is anchored to the repository root so the CLI
+# works whether invoked as `python tools/aof` from the repo root, or from
+# inside the tools/ directory, or as an installed `aof` command.
+# =============================================================================
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT  = os.path.normpath(os.path.join(_SCRIPT_DIR, ".."))
+
+
+def _repo(*parts: str) -> str:
+    """Build an absolute path relative to the repository root."""
+    return os.path.normpath(os.path.join(_REPO_ROOT, *parts))
+
+
+_VALIDATOR = _repo("tools", "validate-contract.py")
+_TEMPLATE  = _repo("templates", "contract-template.yaml")
+
+
+# =============================================================================
+# Validator module loader
+#
+# validate-contract.py contains a hyphen in its filename, which makes it an
+# invalid Python identifier. importlib lets us load it directly by file path.
+# The module is cached after the first load.
+# =============================================================================
+
+_validator_cache = None
+
+
+def _load_validator():
+    global _validator_cache
+    if _validator_cache is not None:
+        return _validator_cache
+
+    if not os.path.exists(_VALIDATOR):
+        print(
+            f"{RED}ERROR:{RESET} validator not found at:\n  {_VALIDATOR}\n"
+            "Ensure you are running from within the AOF repository.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    spec   = importlib.util.spec_from_file_location("validate_contract", _VALIDATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    _validator_cache = module
+    return module
+
+
+# =============================================================================
+# Safe accessors for nested YAML data
+#
+# These helpers navigate a nested dict chain without raising KeyError or
+# TypeError, returning a sensible default when any step is missing or the
+# wrong type.
+# =============================================================================
+
+def _str(obj: Any, *keys: str, default: str = "") -> str:
+    """Walk a key path and return a string, or default if not found/wrong type."""
+    for k in keys:
+        if not isinstance(obj, dict):
+            return default
+        obj = obj.get(k, default)
+    return obj if isinstance(obj, str) else default
+
+
+def _list(obj: Any, *keys: str) -> List:
+    """Walk a key path and return a list, or [] if not found/wrong type."""
+    for k in keys:
+        if not isinstance(obj, dict):
+            return []
+        obj = obj.get(k, [])
+    return obj if isinstance(obj, list) else []
+
+
+def _dict(obj: Any, *keys: str) -> Dict:
+    """Walk a key path and return a dict, or {} if not found/wrong type."""
+    for k in keys:
+        if not isinstance(obj, dict):
+            return {}
+        obj = obj.get(k, {})
+    return obj if isinstance(obj, dict) else {}
+
+
+# =============================================================================
+# Boundary check engine
+#
+# Each _bN_* function checks one of the eight AOF governance boundaries and
+# returns a Boundary object with per-item pass/fail results and messages.
+# =============================================================================
+
+class Boundary:
+    """Result of checking a single governance boundary."""
+
+    def __init__(self, number: int, name: str) -> None:
+        self.number = number
+        self.name   = name
+        self.items: List[Tuple[bool, str]] = []
+
+    def ok(self,   msg: str) -> None: self.items.append((True,  msg))
+    def fail(self, msg: str) -> None: self.items.append((False, msg))
+
+    @property
+    def passed(self) -> bool:
+        return bool(self.items) and all(ok for ok, _ in self.items)
+
+
+def _b1_purpose(c: Dict) -> Boundary:
+    """Boundary 1 — Purpose: why the agent exists, success metrics, and exclusions."""
+    b = Boundary(1, "Purpose")
+    p = _dict(c, "purpose")
+
+    bp = _str(p, "business_purpose").strip()
+    if len(bp) >= 50:
+        b.ok(f"Business purpose: {len(bp)} chars")
+    elif bp:
+        b.fail(f"Business purpose too short: {len(bp)} chars (minimum 50)")
+    else:
+        b.fail("Business purpose not defined — add purpose.business_purpose")
+
+    metrics = _dict(p, "success_metrics")
+    if metrics:
+        b.ok(f"Success metrics: {len(metrics)} defined")
+    else:
+        b.fail("Success metrics not defined — add measurable outcome targets")
+
+    oos = _list(p, "out_of_scope")
+    if oos:
+        b.ok(f"Out-of-scope list: {len(oos)} explicit exclusion(s)")
+    else:
+        b.fail("Out-of-scope list is empty — add 'Cannot X' exclusions")
+
+    return b
+
+
+def _b2_ownership(c: Dict) -> Boundary:
+    """Boundary 2 — Ownership: named domain owner and technical owner with emails."""
+    b = Boundary(2, "Ownership")
+    own = _dict(c, "ownership")
+
+    for label, key in [("Domain owner", "domain_owner"), ("Technical owner", "technical_owner")]:
+        owner = _dict(own, key)
+        name  = _str(owner, "name").strip()
+        email = _str(owner, "email").strip()
+        if name and email:
+            b.ok(f"{label}: {name} ({email})")
+        elif name:
+            b.fail(f"{label} '{name}' is missing an email address")
+        else:
+            b.fail(f"{label} not defined — add ownership.{key} with name and email")
+
+    return b
+
+
+def _b3_authority(c: Dict) -> Boundary:
+    """Boundary 3 — Authority: decisions, prohibited actions, triggers, and override."""
+    b = Boundary(3, "Authority")
+    auth = _dict(c, "authority")
+
+    decisions = _list(auth, "autonomous_decisions")
+    if decisions:
+        b.ok(f"Autonomous decisions: {len(decisions)} defined")
+    else:
+        b.fail("No autonomous decisions — list what the agent can decide without human approval")
+
+    prohibited = _list(auth, "prohibited_actions")
+    if prohibited:
+        b.ok(f"Prohibited actions: {len(prohibited)} defined")
+    else:
+        b.fail("No prohibited actions — add hard limits the agent can never cross")
+
+    triggers = _list(auth, "escalation_triggers")
+    if triggers:
+        b.ok(f"Escalation triggers: {len(triggers)} defined")
+    else:
+        b.fail("No escalation triggers — specify conditions that force human review")
+
+    override = _dict(auth, "override_mechanism")
+    pausers  = _list(override, "who_can_pause")
+    overrider = _str(override, "who_can_override").strip()
+    if pausers and overrider:
+        b.ok(f"Override mechanism: {len(pausers)} pause role(s), override role named")
+    else:
+        missing = []
+        if not pausers:   missing.append("who_can_pause")
+        if not overrider: missing.append("who_can_override")
+        b.fail(f"Override mechanism incomplete — missing: {', '.join(missing)}")
+
+    return b
+
+
+def _b4_data(c: Dict) -> Boundary:
+    """Boundary 4 — Data: permitted sources whitelist, prohibited sources denylist."""
+    b = Boundary(4, "Data")
+    data = _dict(c, "data")
+
+    permitted = _list(data, "permitted_sources")
+    if permitted:
+        b.ok(f"Permitted sources: {len(permitted)} defined")
+    else:
+        b.fail("No permitted data sources — list every source the agent may access")
+
+    prohibited = _list(data, "prohibited_sources")
+    if prohibited:
+        b.ok(f"Prohibited sources: {len(prohibited)} defined")
+    else:
+        b.fail("No prohibited data sources — explicitly exclude off-limits data")
+
+    handling = _dict(data, "sensitive_data_handling")
+    if handling:
+        mask = _list(handling, "must_mask")
+        detail = f"{len(mask)} field(s) masked" if mask else "configured"
+        b.ok(f"Sensitive data handling rules: {detail}")
+    else:
+        b.fail("No sensitive data handling rules — add data.sensitive_data_handling")
+
+    return b
+
+
+def _b5_escalation(c: Dict) -> Boundary:
+    """Boundary 5 — Escalation Path: ordered named contacts in ownership section."""
+    b = Boundary(5, "Escalation Path")
+    path = _list(_dict(c, "ownership"), "escalation_path")
+
+    if path:
+        levels = [e.get("level") for e in path if isinstance(e, dict) and "level" in e]
+        noun   = "level" if len(path) == 1 else "levels"
+        b.ok(f"Escalation path: {len(path)} {noun} defined {levels}")
+    else:
+        b.fail("Escalation path not defined — add ownership.escalation_path with ordered contacts")
+
+    return b
+
+
+def _b6_incident_response(c: Dict) -> Boundary:
+    """Boundary 6 — Incident Response: investigator, scope, and communication owners."""
+    b = Boundary(6, "Incident Response")
+    ir = _dict(c, "incident_response")
+
+    investigator = _str(ir, "investigator_primary").strip()
+    if investigator:
+        b.ok(f"Primary investigator: {investigator}")
+    else:
+        b.fail("Primary investigator not defined — add incident_response.investigator_primary")
+
+    scope = _list(ir, "investigation_scope")
+    if len(scope) >= 3:
+        b.ok(f"Investigation scope: {len(scope)} questions defined")
+    elif scope:
+        b.fail(f"Investigation scope: {len(scope)} question(s) — minimum 3 required")
+    else:
+        b.fail("Investigation scope not defined — list what the investigation must answer")
+
+    comm  = _dict(ir, "communication")
+    cust  = _str(comm, "customer_owner").strip()
+    stake = _str(comm, "stakeholder_owner").strip()
+    compl = _str(comm, "compliance_owner").strip()
+    if cust and stake and compl:
+        b.ok("Communication owners: customer, stakeholder, and compliance defined")
+    else:
+        missing = [name for name, val in
+                   [("customer_owner", cust), ("stakeholder_owner", stake), ("compliance_owner", compl)]
+                   if not val]
+        b.fail(f"Communication owners incomplete — missing: {', '.join(missing)}")
+
+    return b
+
+
+def _b7_governance(c: Dict) -> Boundary:
+    """Boundary 7 — Governance: review cadence, change control board, and signoff."""
+    b = Boundary(7, "Governance")
+    gov = _dict(c, "governance")
+
+    cadence = _str(gov, "review_cadence").strip()
+    if cadence:
+        b.ok(f"Review cadence: {cadence}")
+    else:
+        b.fail("Review cadence not defined — add governance.review_cadence")
+
+    board = _str(gov, "change_control_board").strip()
+    if board:
+        b.ok(f"Change control board: {board}")
+    else:
+        b.fail("Change control board not named — add governance.change_control_board")
+
+    approval = _list(gov, "approval_required_for")
+    if approval:
+        b.ok(f"Approval required for: {len(approval)} change type(s)")
+    else:
+        b.fail("No approval requirements — specify what changes need governance board approval")
+
+    signoff = _dict(c, "signoff")
+    d_name  = _str(signoff, "domain_owner",   "name").strip()
+    t_name  = _str(signoff, "technical_owner", "name").strip()
+    if d_name and t_name:
+        b.ok(f"Signoff: {d_name} (domain) and {t_name} (technical)")
+    elif d_name or t_name:
+        missing = "technical_owner" if d_name else "domain_owner"
+        b.fail(f"Signoff incomplete — {missing} has not signed")
+    else:
+        b.fail("No signoffs — domain_owner and technical_owner must sign before launch")
+
+    return b
+
+
+def _b8_compliance(c: Dict) -> Boundary:
+    """Boundary 8 — Compliance: regulatory frameworks, data classification, audit log."""
+    b = Boundary(8, "Compliance")
+    comp = _dict(c, "compliance")
+
+    frameworks = _list(comp, "frameworks")
+    if frameworks:
+        b.ok(f"Compliance frameworks: {', '.join(str(f) for f in frameworks)}")
+    else:
+        b.fail("No compliance frameworks listed — add applicable regulations (SOX, GDPR, etc.)")
+
+    classification = _str(comp, "data_classification").strip()
+    if classification:
+        b.ok(f"Data classification: {classification}")
+    else:
+        b.fail("Data classification not set — choose: public, internal, restricted, highly-restricted")
+
+    audit = comp.get("audit_log_required")
+    if audit is not None:
+        b.ok(f"Audit log required: {str(audit).lower()}")
+    else:
+        b.fail("Audit log requirement not declared — set compliance.audit_log_required")
+
+    return b
+
+
+def _run_all_boundaries(contract: Dict) -> List[Boundary]:
+    return [
+        _b1_purpose(contract),
+        _b2_ownership(contract),
+        _b3_authority(contract),
+        _b4_data(contract),
+        _b5_escalation(contract),
+        _b6_incident_response(contract),
+        _b7_governance(contract),
+        _b8_compliance(contract),
+    ]
+
+
+# =============================================================================
+# Command: aof validate
+# =============================================================================
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate one or more contract YAML files against the AOF JSON Schema."""
+    v = _load_validator()
+
+    try:
+        schema = v.load_schema()
+    except FileNotFoundError as e:
+        print(f"{RED}ERROR:{RESET} {e}", file=sys.stderr)
+        return 1
+
+    results: List[Tuple[str, bool, List[str]]] = []
+    for filepath in args.files:
+        passed, errors = v.validate_file(filepath, schema, verbose=args.verbose)
+        results.append((filepath, passed, errors))
+        name = os.path.basename(filepath)
+        if passed:
+            print(_ok(f"{BOLD}{name}{RESET}"))
+        else:
+            print(_fail(f"{BOLD}{name}{RESET}"))
+            for err in errors:
+                print(f"    {RED}→{RESET} {err}")
+
+    total  = len(results)
+    failed = sum(1 for _, p, _ in results if not p)
+    print()
+    if failed == 0:
+        print(_ok(f"All {total} contract(s) valid"))
+    else:
+        print(_fail(f"{failed}/{total} contract(s) failed validation"))
+
+    return 1 if failed else 0
+
+
+# =============================================================================
+# Command: aof create
+# =============================================================================
+
+def cmd_create(args: argparse.Namespace) -> int:
+    """Create a new contract file from the blank template."""
+    if not os.path.exists(_TEMPLATE):
+        print(f"{RED}ERROR:{RESET} Template not found:\n  {_TEMPLATE}", file=sys.stderr)
+        return 1
+
+    dest = args.name
+    if os.path.exists(dest):
+        print(
+            f"{RED}ERROR:{RESET} '{dest}' already exists.\n"
+            "Choose a different name or delete the existing file first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Create parent directories if the user gave a path like contracts/my-agent.yaml
+    parent = os.path.dirname(dest)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    try:
+        shutil.copy2(_TEMPLATE, dest)
+    except OSError as e:
+        print(f"{RED}ERROR:{RESET} Could not create '{dest}': {e}", file=sys.stderr)
+        return 1
+
+    print(_ok(f"Created: {BOLD}{dest}{RESET}"))
+    print()
+    print(f"{DIM}Next steps:{RESET}")
+    print(f"  1. Open {BOLD}{dest}{RESET} and replace all placeholder values")
+    print(f"  2. Validate the schema:      aof validate {dest}")
+    print(f"  3. Check all 8 boundaries:   aof check {dest}")
+    print()
+    print(f"{DIM}Reference example: schema/v1/agent-ownership-contract.example.yaml{RESET}")
+
+    return 0
+
+
+# =============================================================================
+# Command: aof check
+# =============================================================================
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """Validate the schema and check all eight governance boundaries."""
+    try:
+        import yaml
+    except ImportError:
+        print(f"{RED}ERROR:{RESET} pyyaml is required. Run: pip install pyyaml", file=sys.stderr)
+        return 1
+
+    filepath = args.file
+    filename = os.path.basename(filepath)
+
+    # --- Load and parse YAML -------------------------------------------------
+    if not os.path.exists(filepath):
+        print(f"{RED}ERROR:{RESET} File not found: {filepath}", file=sys.stderr)
+        return 1
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as fh:
+            contract = yaml.safe_load(fh)
+    except yaml.YAMLError as e:
+        print(f"{RED}ERROR:{RESET} YAML parse error in {filename}:\n  {e}", file=sys.stderr)
+        return 1
+
+    if not isinstance(contract, dict):
+        print(f"{RED}ERROR:{RESET} {filename} is not a YAML mapping.", file=sys.stderr)
+        return 1
+
+    # --- Schema validation ---------------------------------------------------
+    v = _load_validator()
+    try:
+        schema = v.load_schema()
+    except FileNotFoundError as e:
+        print(f"{RED}ERROR:{RESET} {e}", file=sys.stderr)
+        return 1
+
+    schema_passed, schema_errors = v.validate_file(filepath, schema)
+
+    # --- Header --------------------------------------------------------------
+    rule = "═" * 54
+    div  = "─" * 54
+    print()
+    print(f"{BOLD}Contract Boundary Check: {filename}{RESET}")
+    print(rule)
+    print()
+
+    # --- Schema status -------------------------------------------------------
+    if schema_passed:
+        print(f"  Schema validation:  {GREEN}✓ PASS{RESET}")
+    else:
+        print(f"  Schema validation:  {RED}✗ FAIL  ({len(schema_errors)} error(s)){RESET}")
+        # Show up to 5 errors; direct to validate for the full list
+        for err in schema_errors[:5]:
+            print(f"    {RED}→{RESET} {err}")
+        if len(schema_errors) > 5:
+            print(
+                f"    {DIM}... and {len(schema_errors) - 5} more.  "
+                f"Run: aof validate {filepath}{RESET}"
+            )
+    print()
+
+    # --- Boundary checks -----------------------------------------------------
+    boundaries  = _run_all_boundaries(contract)
+    all_b_pass  = all(b.passed for b in boundaries)
+
+    for b in boundaries:
+        status = f"{GREEN}✓{RESET}" if b.passed else f"{RED}✗{RESET}"
+        print(f"  {status} Boundary {b.number} — {BOLD}{b.name}{RESET}")
+        for item_ok, msg in b.items:
+            icon = f"{GREEN}✓{RESET}" if item_ok else f"{RED}✗{RESET}"
+            print(f"      {icon} {msg}")
+        print()
+
+    # --- Summary -------------------------------------------------------------
+    print(div)
+    failed_b = sum(1 for b in boundaries if not b.passed)
+
+    if schema_passed and all_b_pass:
+        print(f"  {GREEN}✓ All 8 boundaries satisfied — contract is governance-complete{RESET}")
+        return 0
+
+    parts = []
+    if not schema_passed:
+        parts.append(f"{len(schema_errors)} schema error(s)")
+    if failed_b:
+        parts.append(f"{failed_b}/8 boundaries incomplete")
+    print(f"  {RED}✗ {', '.join(parts)}{RESET}")
+    if not schema_passed:
+        print(f"  {DIM}Full error list: aof validate {filepath}{RESET}")
+
+    return 1
+
+
+# =============================================================================
+# Argument parser
+# =============================================================================
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="aof",
+        description="AOF — Agent Ownership Framework CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+commands:
+  validate   Validate contract(s) against the JSON Schema
+  create     Create a new contract from the template
+  check      Check all eight governance boundaries
+
+examples:
+  aof validate examples/support-agent.yaml
+  aof validate examples/*.yaml
+  aof create my-payment-agent.yaml
+  aof check my-payment-agent.yaml
+
+docs:    docs/FRAMEWORK.md
+schema:  schema/v1/agent-ownership-contract.schema.json
+""",
+    )
+
+    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+    sub.required = True
+
+    # -- validate -------------------------------------------------------------
+    p_val = sub.add_parser(
+        "validate",
+        help="Validate contract(s) against the AOF JSON Schema",
+        description=(
+            "Validates one or more AOF v1 contract YAML files against the JSON Schema\n"
+            "and performs additional semantic checks (email formats, SLA ranges,\n"
+            "escalation level sequencing, etc.)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  aof validate my-agent.yaml
+  aof validate examples/support-agent.yaml examples/fraud-detection-agent.yaml
+  aof validate examples/*.yaml
+  aof validate --verbose my-agent.yaml
+
+exit codes:
+  0  all files valid
+  1  one or more files failed
+""",
+    )
+    p_val.add_argument(
+        "files", nargs="+", metavar="FILE",
+        help="YAML contract file(s) to validate",
+    )
+    p_val.add_argument(
+        "--verbose", "-v", action="store_true",
+        help="Print each individual check result (YAML parse, schema, semantic)",
+    )
+    p_val.set_defaults(func=cmd_validate)
+
+    # -- create ---------------------------------------------------------------
+    p_create = sub.add_parser(
+        "create",
+        help="Create a new contract from the blank template",
+        description=(
+            "Copies the blank AOF contract template to a new file.\n"
+            "The template contains all required fields with placeholder values\n"
+            "and guidance comments for every section."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  aof create my-payment-agent.yaml
+  aof create contracts/fraud-detection-agent.yaml
+
+next steps after creating:
+  1. Open the file and replace all placeholder values
+  2. aof validate my-payment-agent.yaml
+  3. aof check my-payment-agent.yaml
+""",
+    )
+    p_create.add_argument(
+        "name", metavar="NAME.yaml",
+        help="Output filename (e.g., my-agent.yaml or contracts/my-agent.yaml)",
+    )
+    p_create.set_defaults(func=cmd_create)
+
+    # -- check ----------------------------------------------------------------
+    p_check = sub.add_parser(
+        "check",
+        help="Check all eight governance boundaries",
+        description=(
+            "Validates the schema and checks every AOF governance boundary,\n"
+            "showing a human-readable checklist with pass/fail per item.\n\n"
+            "The eight boundaries:\n"
+            "  1. Purpose          business_purpose, success_metrics, out_of_scope\n"
+            "  2. Ownership        named domain_owner and technical_owner\n"
+            "  3. Authority        autonomous decisions, prohibited actions, triggers\n"
+            "  4. Data             permitted and prohibited data sources\n"
+            "  5. Escalation Path  ordered contacts in ownership.escalation_path\n"
+            "  6. Incident Response investigator, investigation scope, comms owners\n"
+            "  7. Governance       review cadence, change control board, signoff\n"
+            "  8. Compliance       frameworks, data classification, audit log"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  aof check my-agent.yaml
+  aof check examples/fraud-detection-agent.yaml
+
+exit codes:
+  0  schema valid and all 8 boundaries satisfied
+  1  schema errors or one or more boundaries incomplete
+""",
+    )
+    p_check.add_argument(
+        "file", metavar="FILE",
+        help="YAML contract file to check",
+    )
+    p_check.set_defaults(func=cmd_check)
+
+    return parser
+
+
+# =============================================================================
+# Entry point
+# =============================================================================
+
+def main() -> int:
+    parser = _build_parser()
+    args   = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

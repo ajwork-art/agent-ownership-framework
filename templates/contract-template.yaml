@@ -3,7 +3,7 @@
 #
 # Instructions:
 # 1. Copy this file: cp templates/contract-template.yaml my-agent-contract.yaml
-# 2. Replace all [PLACEHOLDER] values with your actual values
+# 2. Replace all placeholder values with your actual values
 # 3. Remove comments you no longer need after filling in the fields
 # 4. Validate: python tools/validate-contract.py my-agent-contract.yaml
 #
@@ -29,7 +29,7 @@ metadata:
   # (REQUIRED) Unique kebab-case slug identifying this contract.
   # Pattern: lowercase letters, numbers, and hyphens only (e.g., my-agent-name).
   # Must match agent.id below. Use the agent's function, not the team name.
-  name: [your-agent-name]
+  name: "your-agent-name"
 
   # (REQUIRED) Semantic version of this CONTRACT document (not the agent code).
   # Start at 1.0.0. Increment patch for minor edits, minor for scope changes,
@@ -38,27 +38,27 @@ metadata:
 
   # (REQUIRED) ISO 8601 date when this contract was first created.
   # Format: "YYYY-MM-DD". Do not update this field — it is the creation date.
-  created: "[YYYY-MM-DD]"
+  created: "2026-01-01"
 
   # (REQUIRED) ISO 8601 date of the most recent change to this contract.
   # Update this field on every change, even minor wording edits.
-  updated: "[YYYY-MM-DD]"
+  updated: "2026-01-01"
 
   # (OPTIONAL) Key-value string pairs for filtering in CI/CD dashboards and tooling.
   # Use consistent label keys across all your contracts for easy querying.
   labels:
     env: production                    # Environment: production, staging, development
-    team: [your-team-name]             # Team that owns this agent
+    team: "your-team-name"             # Team that owns this agent
     # cost-center: CC-0000             # Cost center or budget code (optional)
-    # risk-tier: [low|medium|high|critical]  # Mirror of risk.risk_tier for filtering
+    # risk-tier: medium                # Mirror of risk.risk_tier for filtering
 
   # (OPTIONAL) Non-identifying supplementary metadata. Ticket numbers, wiki
   # links, runbook URLs, and on-call schedule links belong here.
   annotations:
-    jira-epic: "[JIRA-000]"            # Tracking ticket for this agent's delivery
-    # runbook-url: "[https://wiki.company.com/your-agent-runbook]"
-    # oncall-schedule: "[https://pagerduty.company.com/schedules/YOUR-ID]"
-    # confluence-page: "[https://wiki.company.com/display/TEAM/your-agent]"
+    jira-epic: "JIRA-000"             # Tracking ticket for this agent's delivery
+    # runbook-url: "https://wiki.company.com/your-agent-runbook"
+    # oncall-schedule: "https://pagerduty.company.com/schedules/YOUR-ID"
+    # confluence-page: "https://wiki.company.com/display/TEAM/your-agent"
 
 # =============================================================================
 # AGENT — What this agent is and does.
@@ -68,36 +68,36 @@ metadata:
 agent:
   # (REQUIRED) Globally unique identifier. Must match metadata.name exactly.
   # Used in logs, alerts, and cross-references across systems.
-  id: [your-agent-name]
+  id: "your-agent-name"
 
   # (REQUIRED) Human-readable display name. Minimum 5 characters.
   # Example: "Customer Support Agent", "Fraud Detection Agent"
-  name: [Your Agent Display Name]
+  name: "Your Agent Display Name"
 
   # (REQUIRED) What this agent does AND what it explicitly does not do.
   # Minimum 50 characters. Include a clear "Does not X" clause — this defines
   # system boundaries and prevents scope creep.
   description: >
-    [Describe what this agent does in 1-3 sentences. Then add a sentence
+    Describe what this agent does in 1-3 sentences. Then add a sentence
     explicitly stating what it does NOT do. Minimum 50 characters total.
     Example: "Processes payment transactions for checkout. Does not store raw
-    card data, does not handle refunds, and does not interact with customers."]
+    card data, does not handle refunds, and does not interact with customers."
 
-  # (REQUIRED) Operational classification. Choose one:
-  #   autonomous = acts without human triggers (e.g., fraud scoring pipeline)
-  #   hybrid     = triggered by humans but acts autonomously within its scope
-  #   advisory   = produces recommendations only; humans make all final decisions
-  type: [autonomous|hybrid|advisory]
+  # (REQUIRED) Operational classification. Choose one and delete the others.
+  # autonomous = acts without human triggers (e.g., fraud scoring pipeline)
+  # hybrid     = triggered by humans but acts autonomously within its scope
+  # advisory   = produces recommendations only; humans make all final decisions
+  type: hybrid                        # Options: autonomous, hybrid, advisory
 
   # (REQUIRED) Business domain the agent operates in.
   # Examples: financial-services, customer-service, operations, risk-management,
   # internal-tooling, healthcare, legal, supply-chain
-  domain: [your-domain]
+  domain: "your-domain"
 
   # (OPTIONAL) Free-form tags for search and categorization.
   tags:
-    - [tag1]    # Examples: real-time, pci-scope, read-only, customer-facing
-    - [tag2]
+    - "tag1"    # Examples: real-time, pci-scope, read-only, customer-facing
+    - "tag2"
 
 # =============================================================================
 # BOUNDARY 1: PURPOSE
@@ -109,25 +109,25 @@ purpose:
   # Be specific enough that a new team member can understand the business case.
   # Minimum 50 characters. Include what the agent replaces or enables.
   business_purpose: >
-    [Describe the business problem this agent solves. Explain what it replaces
+    Describe the business problem this agent solves. Explain what it replaces
     or enables — e.g., "replaces a manual review process that took 8-12 minutes
     per case" or "enables real-time scoring at a volume that cannot be manually
-    reviewed." Minimum 50 characters. Be specific about the business outcome.]
+    reviewed." Minimum 50 characters. Be specific about the business outcome.
 
   # (REQUIRED) Measurable outcomes defining whether this agent is succeeding.
   # Key = metric name (no spaces, use underscores), value = target or description.
   # These are reviewed at each governance cadence to assess continued purpose fit.
   success_metrics:
-    [metric_name]: "[target or description]"    # Example: resolution_rate: ">= 80%"
-    [metric_name]: "[target or description]"    # Example: latency_p99_ms: 3000
+    metric_name_1: ">= 80%"           # Example: resolution_rate: ">= 80%"
+    metric_name_2: "< 3000ms p99"     # Example: latency_p99_ms: "< 3000ms p99"
 
   # (REQUIRED) Explicit list of things this agent is NOT intended to do.
   # Minimum 1 item. Write as "Cannot X" statements. If a new feature request
   # falls into this list, it requires a scope expansion review first.
   out_of_scope:
-    - "[Cannot do X — state the boundary explicitly]"
-    - "[Cannot access Y — which data or systems are off-limits]"
-    - "[Cannot perform Z without human approval — if approval is required]"
+    - "Cannot do X — state the boundary explicitly"
+    - "Cannot access Y — which data or systems are off-limits"
+    - "Cannot perform Z without human approval — if approval is required"
 
 # =============================================================================
 # BOUNDARY 2: OWNERSHIP
@@ -139,32 +139,32 @@ ownership:
   # whether the agent is being used acceptably, and business risk if it fails.
   # This should be a business or product leader, not the engineer who built it.
   domain_owner:
-    name: [Full Name]                  # First and last name of the named individual
-    role: "[Job Title]"                # Title: "Director, Customer Support", "VP Risk"
-    email: [person@company.com]        # Individual email — not a team alias
+    name: "Full Name"                  # First and last name of the named individual
+    role: "Job Title"                  # Title: "Director, Customer Support", "VP Risk"
+    email: "person@company.com"        # Individual email — not a team alias
     accountability:
-      - "[What they are accountable for — be specific, not generic]"
-      - "[Business risk they accept if the agent fails]"
-      - "[What changes they must authorize]"
+      - "What they are accountable for — be specific, not generic"
+      - "Business risk they accept if the agent fails"
+      - "What changes they must authorize"
 
   # (REQUIRED) Engineering accountability owner. Accountable for build quality,
   # runtime behavior, deployment decisions, and operational runbooks.
   technical_owner:
-    name: [Full Name]
-    role: "[Engineering Title]"        # "Staff Engineer", "Engineering Lead", "Platform Engineer"
-    email: [person@company.com]
+    name: "Full Name"
+    role: "Engineering Title"          # "Staff Engineer", "Engineering Lead", "Platform Engineer"
+    email: "person@company.com"
     accountability:
-      - "[Build quality and test coverage]"
-      - "[Runtime behavior and SLA compliance]"
-      - "[Ensuring authority limits are enforced in production code]"
-      - "[Runbook and incident response procedures]"
+      - "Build quality and test coverage"
+      - "Runtime behavior and SLA compliance"
+      - "Ensuring authority limits are enforced in production code"
+      - "Runbook and incident response procedures"
 
   # (OPTIONAL) Data accountability owner. Required if the agent accesses sensitive
   # data or operates in a regulated domain (PCI-DSS, GLBA, HIPAA, GDPR).
   # data_owner:
-  #   name: [Full Name]
-  #   role: "[Data Governance Role]"
-  #   email: [person@company.com]
+  #   name: "Full Name"
+  #   role: "Data Governance Role"
+  #   email: "person@company.com"
   #   accountability:
   #     - "Approving all data sources in the data.permitted_sources section"
   #     - "Ensuring data access complies with [FRAMEWORK] requirements"
@@ -172,9 +172,9 @@ ownership:
 
   # (OPTIONAL) Risk accountability owner. Required for agents in regulated domains.
   # risk_owner:
-  #   name: [Full Name]
-  #   role: "[Risk/Compliance Title]"
-  #   email: [person@company.com]
+  #   name: "Full Name"
+  #   role: "Risk/Compliance Title"
+  #   email: "person@company.com"
   #   accountability:
   #     - "Assessing regulatory exposure under applicable frameworks"
   #     - "Determining whether regulatory disclosure is required after incidents"
@@ -185,13 +185,13 @@ ownership:
   # or the incident exceeds owner authority.
   escalation_path:
     - level: 1
-      name: [Full Name]                # First escalation contact above the named owners
-      email: [manager@company.com]
-      role: [Manager or Director Title]
+      name: "Full Name"               # First escalation contact above the named owners
+      email: "manager@company.com"
+      role: "Manager or Director Title"
     - level: 2
-      name: [Full Name]                # Second escalation — VP or C-Suite level
-      email: [vp@company.com]
-      role: [VP or C-Suite Title]
+      name: "Full Name"               # Second escalation — VP or C-Suite level
+      email: "vp@company.com"
+      role: "VP or C-Suite Title"
     # Add level: 3 for critical-tier agents requiring executive escalation
 
 # =============================================================================
@@ -204,14 +204,14 @@ authority:
   # without human approval. If a decision type is not listed, human approval
   # is required. Each entry needs: decision_type (label) and description.
   autonomous_decisions:
-    - decision_type: [action_verb_noun]    # Short label: issue_refund, route_transaction, score_record
-      # limit: [number]                   # (OPTIONAL) Numeric cap (e.g., 500 for $500 limit)
+    - decision_type: "action_verb_noun"   # Short label: issue_refund, route_transaction, score_record
+      # limit: 500                        # (OPTIONAL) Numeric cap (e.g., 500 for $500 limit)
       # currency: USD                     # (OPTIONAL) Currency code if limit is monetary
       # requires_approval: false          # (OPTIONAL) True if human approval is required
       description: >
-        [Full description of what this decision covers, any conditions or
+        Full description of what this decision covers, any conditions or
         constraints, and why autonomous authority is appropriate for this
-        decision type. Be specific about what happens and when.]
+        decision type. Be specific about what happens and when.
 
     # Add additional decision types as needed. Each new type must be reviewed
     # and approved before being added to production.
@@ -219,9 +219,9 @@ authority:
   # (REQUIRED) Conditions that cause the agent to stop and escalate to a human
   # rather than proceeding autonomously. Minimum 1 item. Be specific and testable.
   escalation_triggers:
-    - "[Condition 1 — specific threshold or scenario that triggers escalation]"
-    - "[Condition 2 — another specific trigger scenario]"
-    - "[Condition 3 — error or anomaly condition requiring human review]"
+    - "Condition 1 — specific threshold or scenario that triggers escalation"
+    - "Condition 2 — another specific trigger scenario"
+    - "Condition 3 — error or anomaly condition requiring human review"
 
   # (REQUIRED) Hard limits — things this agent can never do under any circumstances.
   # Minimum 1 item. Write as "Cannot X" statements. These are governance guardrails,
@@ -236,14 +236,14 @@ authority:
     # (REQUIRED) Named roles authorized to pause this agent. Minimum 1 entry.
     # Each entry must include: role, method (how they pause it), sla_minutes.
     who_can_pause:
-      - role: "[technical_owner or on-call engineer]"
-        method: "[How they pause it — e.g., feature flag in LaunchDarkly, ops console kill switch]"
-        sla_minutes: [integer]          # Maximum minutes from decision to agent being stopped. Minimum 1.
-      - role: "[domain_owner]"
-        method: "[Pause method for domain owner — e.g., business operations console]"
-        sla_minutes: [integer]
+      - role: "technical_owner or on-call engineer"
+        method: "How they pause it — e.g., feature flag in LaunchDarkly, ops console kill switch"
+        sla_minutes: 5                  # Maximum minutes from decision to agent being stopped. Minimum 1.
+      - role: "domain_owner"
+        method: "Pause method for domain owner — e.g., business operations console"
+        sla_minutes: 15
     # (REQUIRED) Named role with highest authority to override any pause/resume decision.
-    who_can_override: "[VP Engineering or Chief Risk Officer or equivalent role]"
+    who_can_override: "VP Engineering or Chief Risk Officer or equivalent role"
 
 # =============================================================================
 # BOUNDARY 4: DATA
@@ -254,21 +254,21 @@ data:
   # (REQUIRED) Data sources this agent is explicitly authorized to access.
   # Minimum 1 entry. If a source is not listed here, access is not permitted.
   permitted_sources:
-    - source: "[Data Source Name]"     # Name of the database, API, stream, or system
-      # fields:                        # (OPTIONAL) Specific fields permitted — omit for all fields
+    - source: "Data Source Name"        # Name of the database, API, stream, or system
+      # fields:                         # (OPTIONAL) Specific fields permitted — omit for all fields
       #   - field_name_1
       #   - field_name_2
-      access_level: [read|write]       # "read" = read-only; "write" = can modify or append
-      # time_window_days: 90           # (OPTIONAL) How many days of history the agent can access
-      reason: "[Why access to this source is needed for the agent's purpose]"
+      access_level: read                # Options: read, write
+      # time_window_days: 90            # (OPTIONAL) How many days of history the agent can access
+      reason: "Why access to this source is needed for the agent's purpose"
 
     # Add additional sources as needed. Each addition requires data_owner approval.
 
   # (REQUIRED) Data sources this agent must never access. Minimum 1 item.
   # Being explicit makes unauthorized access detectable in audit logs.
   prohibited_sources:
-    - "[Prohibited data source 1 — why access is prohibited]"
-    - "[Prohibited data source 2 — which team or system owns this data]"
+    - "Prohibited data source 1 — why access is prohibited"
+    - "Prohibited data source 2 — which team or system owns this data"
     - "Any data source not listed in permitted_sources above"
 
   # (REQUIRED) Rules for handling sensitive or personal data. Binding in all
@@ -277,22 +277,22 @@ data:
     # (REQUIRED) PII or sensitive fields that must be masked in all logs and outputs.
     # Never appear in plain text in any audit, debugging, or monitoring context.
     must_mask:
-      - [sensitive_field_name]         # Example: card_number, ssn, employee_email
+      - "sensitive_field_name"          # Example: card_number, ssn, employee_email
 
     # (REQUIRED) All data in transit must be encrypted. TLS 1.2+ minimum.
-    must_encrypt_in_transit: [true|false]
+    must_encrypt_in_transit: true
 
     # (REQUIRED) If true, no sensitive data may be cached or stored beyond the
     # active session. No local state, no persistent caching of session data.
-    cannot_retain: [true|false]
+    cannot_retain: false
 
     # (REQUIRED) How long data processed by this agent may be retained and under
     # what authority. Must reference a regulatory or policy basis.
     # Minimum 20 characters.
     retention_policy: >
-      [Describe how long agent inputs, outputs, decisions, and logs are retained.
+      Describe how long agent inputs, outputs, decisions, and logs are retained.
       Cite the regulatory or policy basis: e.g., "7 years per SOX Section 802" or
-      "90 days per internal data minimization policy." Minimum 20 characters.]
+      "90 days per internal data minimization policy." Minimum 20 characters.
 
 # =============================================================================
 # BOUNDARIES 5 & 8: INCIDENT RESPONSE
@@ -302,48 +302,48 @@ data:
 incident_response:
   # (REQUIRED) Primary investigator for production incidents. Must be a named role.
   # This person leads root cause analysis and owns log access during investigation.
-  investigator_primary: "[technical_owner or Senior Engineer On-Call]"
+  investigator_primary: "technical_owner or Senior Engineer On-Call"
 
   # (REQUIRED) Secondary investigator if primary is unavailable.
   # Takes over if primary is on PTO or the incident is critical-tier.
-  investigator_secondary: "[On-Call Engineer or domain_owner]"
+  investigator_secondary: "On-Call Engineer or domain_owner"
 
   # (OPTIONAL) Named roles with access to agent logs for investigation.
   # If omitted, access is governed by the organization's default log access policy.
   log_access:
     - "technical_owner"
-    - "[On-Call Engineer role name]"
-    - "[domain_owner (read-only, for business impact assessment)]"
+    - "On-Call Engineer role name"
+    - "domain_owner (read-only, for business impact assessment)"
 
   # (REQUIRED) Questions the investigation must answer. Minimum 3 items.
   # These define the minimum bar for incident reconstruction — what a regulator
   # or auditor would require to understand what happened.
   investigation_scope:
-    - "[What went wrong and which systems or customers were affected?]"
-    - "[Did the agent exceed its declared authority limits at any point?]"
-    - "[Was any sensitive or prohibited data exposed during or before the incident?]"
+    - "What went wrong and which systems or customers were affected?"
+    - "Did the agent exceed its declared authority limits at any point?"
+    - "Was any sensitive or prohibited data exposed during or before the incident?"
     # Add additional questions specific to your agent's risk profile
 
   # (REQUIRED) Who owns communication during and after an incident.
   communication:
     # Role responsible for communicating with affected customers.
-    customer_owner: "[domain_owner name — coordinates customer notifications]"
+    customer_owner: "domain_owner name — coordinates customer notifications"
     # Role responsible for communicating with internal stakeholders (executives, boards).
-    stakeholder_owner: "[domain_owner — briefs VP and leadership on business impact]"
+    stakeholder_owner: "domain_owner — briefs VP and leadership on business impact"
     # Role responsible for communicating with regulators, auditors, and legal.
-    compliance_owner: "[risk_owner or domain_owner — determines disclosure obligations]"
+    compliance_owner: "risk_owner or domain_owner — determines disclosure obligations"
 
   # (REQUIRED) Post-incident review requirements.
   post_incident_review:
     # Whether a post-mortem must be produced after every production incident.
     # Strongly recommended: true for risk_tier medium and above.
-    required: [true|false]
+    required: true
     # Number of days after resolution by which the review must be completed.
-    sla_days: [integer]               # Recommended: 5 for medium, 2 for critical
+    sla_days: 5                        # Recommended: 5 for medium, 2 for critical
     participants:
       - domain_owner
       - technical_owner
-      - "[On-Call Engineer who responded]"
+      - "On-Call Engineer who responded"
       # Add additional participants (compliance, data owner, customer success, etc.)
 
 # =============================================================================
@@ -351,67 +351,65 @@ incident_response:
 # =============================================================================
 governance:
   # (REQUIRED) How often the contract and agent behavior must be formally reviewed.
-  # Options: weekly, monthly, quarterly, annually.
   # Recommendations: monthly/quarterly for medium/high/critical; annually for low.
-  review_cadence: [weekly|monthly|quarterly|annually]
+  review_cadence: quarterly            # Options: weekly, monthly, quarterly, annually
 
   # (REQUIRED) Changes that require explicit governance board approval before
   # implementation. Minimum 1 item. Be specific — vague entries are unenforceable.
   approval_required_for:
-    - "[Model version change or retraining on new data]"
-    - "[New data source or external API integration]"
-    - "[Scope expansion beyond current boundaries declared in purpose.out_of_scope]"
-    - "[Change to autonomous decision limits or thresholds]"
+    - "Model version change or retraining on new data"
+    - "New data source or external API integration"
+    - "Scope expansion beyond current boundaries declared in purpose.out_of_scope"
+    - "Change to autonomous decision limits or thresholds"
 
   # (REQUIRED) Name of the governing body responsible for approving changes.
-  change_control_board: "[Name of Governance Committee or Review Board]"
+  change_control_board: "Name of Governance Committee or Review Board"
 
   # (OPTIONAL) ISO 8601 date of the most recent formal review.
-  last_reviewed: "[YYYY-MM-DD]"
+  last_reviewed: "2026-01-01"
 
   # (OPTIONAL) ISO 8601 date of the next scheduled review.
-  next_review: "[YYYY-MM-DD]"
+  next_review: "2026-04-01"
 
 # =============================================================================
 # BOUNDARY 6: LIFECYCLE
 # Deployment status, versioning policy, monitoring, and retirement plan.
 # =============================================================================
 lifecycle:
-  # (REQUIRED) Current lifecycle status.
-  # Options: active, conditional, pilot, paused, retired.
+  # (REQUIRED) Current lifecycle status. Choose one and delete the others.
   #   active      = in full production
   #   conditional = limited rollout with conditions (e.g., specific regions or users)
   #   pilot       = experimental deployment with heightened monitoring
   #   paused      = temporarily suspended (must declare reason)
   #   retired     = decommissioned
-  status: [active|conditional|pilot|paused|retired]
+  status: pilot                        # Options: active, conditional, pilot, paused, retired
 
   # (OPTIONAL) ISO 8601 date the agent was first deployed to production.
-  deployed_at: "[YYYY-MM-DD]"
+  deployed_at: "2026-01-01"
 
   # (OPTIONAL) Versioning policy. Recommended for high/critical-tier agents.
   versioning:
     # If true, any change to the agent or contract requires governance approval.
-    all_changes_require_approval: [true|false]
+    all_changes_require_approval: true
     # What constitutes a "material change" requiring a new review cycle and signoff.
     material_change_definition:
-      - "[Change to autonomous decision limits or types]"
-      - "[Adding or removing a data source]"
-      - "[Change in ownership roles]"
+      - "Change to autonomous decision limits or types"
+      - "Adding or removing a data source"
+      - "Change in ownership roles"
 
   # (OPTIONAL) What is actively monitored in production.
   monitoring:
     real_time_metrics:
-      - "[Metric 1 — what is measured and what is the alert threshold]"
-      - "[Metric 2 — e.g., error rate > 1%, latency p99 > 3000ms]"
-    review_frequency_days: [integer]  # How often technical owner reviews monitoring outputs
+      - "Metric 1 — what is measured and what is the alert threshold"
+      - "Metric 2 — e.g., error rate > 1%, latency p99 > 3000ms"
+    review_frequency_days: 7           # How often technical owner reviews monitoring outputs
 
   # (OPTIONAL) Retirement criteria and timeline.
   retirement:
     criteria:
-      - "[Condition 1 that would trigger decommissioning]"
-      - "[Condition 2 — e.g., replacement agent reaches production stability]"
-    planned_review_date: "[YYYY-MM-DD]"
+      - "Condition 1 that would trigger decommissioning"
+      - "Condition 2 — e.g., replacement agent reaches production stability"
+    planned_review_date: "2027-01-01"
 
 # =============================================================================
 # COMPLIANCE — Regulatory frameworks and data handling requirements.
@@ -419,69 +417,69 @@ lifecycle:
 compliance:
   # (REQUIRED) Applicable regulatory frameworks. Minimum 1 item.
   # Common values: SOX, GLBA, PCI-DSS, BSA-AML, GDPR, FCRA, HIPAA, ECOA, EU-AI-Act
-  # For internal-only agents with no regulatory requirements: [internal-policy]
+  # For internal-only agents with no regulatory requirements: internal-policy
   frameworks:
-    - [FRAMEWORK-1]
-    # - [FRAMEWORK-2]
+    - "FRAMEWORK-1"
+    # - "FRAMEWORK-2"
 
-  # (REQUIRED) Data sensitivity level.
-  # public          = no restrictions; freely shareable
-  # internal        = employee access only
-  # restricted      = limited access with explicit controls
+  # (REQUIRED) Data sensitivity level. Choose one and delete the others.
+  # public           = no restrictions; freely shareable
+  # internal         = employee access only
+  # restricted       = limited access with explicit controls
   # highly-restricted = strongest controls; explicit authorization required
-  data_classification: [public|internal|restricted|highly-restricted]
+  data_classification: internal        # Options: public, internal, restricted, highly-restricted
 
   # (REQUIRED) Plain-language description of how PII is processed and protected.
   # Minimum 20 characters. Be specific about what PII is touched and how it is
   # protected (masking, tokenization, encryption, access controls).
   pii_handling: >
-    [Describe what personally identifiable information this agent accesses or
+    Describe what personally identifiable information this agent accesses or
     produces, how it is protected (masking, tokenization, encryption), and any
     special handling requirements. If the agent accesses no PII, state that
-    explicitly. Minimum 20 characters.]
+    explicitly. Minimum 20 characters.
 
   # (REQUIRED) Must all agent inputs, outputs, and decisions be written to an
   # immutable audit log? Recommended true for risk_tier medium and above.
-  audit_log_required: [true|false]
+  audit_log_required: true
 
   # (REQUIRED) Data retention requirements. Minimum 20 characters.
   # Cite the regulatory or policy basis for the retention period.
   retention_policy: >
-    [Describe how long agent inputs, outputs, decisions, and logs are retained.
+    Describe how long agent inputs, outputs, decisions, and logs are retained.
     Cite the regulatory or policy basis: e.g., "7 years per SOX Section 802"
-    or "90 days per internal data minimization policy." Minimum 20 characters.]
+    or "90 days per internal data minimization policy." Minimum 20 characters.
 
 # =============================================================================
 # RISK — Risk profile, blast radius, and safety controls.
 # =============================================================================
 risk:
-  # (REQUIRED) Risk classification. Choose one:
+  # (REQUIRED) Risk classification. Choose one and delete the others.
   # low      = minimal impact if it fails (internal tooling, advisory with no financial exposure)
   # medium   = significant but contained impact (customer-facing with limited financial exposure)
   # high     = major customer or business impact (payment processing, data access, regulated domain)
   # critical = existential, regulatory, or systemic risk (fraud detection, credit decisions at scale)
-  risk_tier: [low|medium|high|critical]
+  risk_tier: medium                    # Options: low, medium, high, critical
 
   # (REQUIRED) Worst-case impact if this agent fails, is compromised, or behaves incorrectly.
   # Minimum 50 characters. Write this as if you are briefing your CEO the day it fails.
   # Be specific: how many users, how much money, which systems, what regulatory implications,
   # estimated recovery time. Vague statements like "could affect customers" are not acceptable.
   blast_radius: >
-    [Describe the worst-case scenario specifically. Include: how many users or
+    Describe the worst-case scenario specifically. Include: how many users or
     transactions are affected, financial exposure estimate, regulatory implications
     (if any), and estimated time to detect and recover. Minimum 50 characters.
     Example: "A failure could affect all 50,000 active checkout sessions, causing
     failed payments at $2M/hour. PCI-DSS incident reporting required if card data
-    is at risk. Recovery: 15 minutes to activate fallback with runbook procedures."]
+    is at risk. Recovery: 15 minutes to activate fallback with runbook procedures."
 
   # (REQUIRED) Whether a human must review and approve consequential actions
   # before the agent executes them. Set true if the agent makes decisions that
   # directly affect customers, finances, or regulatory obligations.
-  human_in_the_loop_required: [true|false]
+  human_in_the_loop_required: false
 
   # (OPTIONAL) Email of the named individual authorized to immediately disable
   # this agent in production. Must be someone who is on-call and monitoring.
-  kill_switch_owner: [owner@company.com]
+  kill_switch_owner: "owner@company.com"
 
 # =============================================================================
 # BOUNDARY 7: SIGNOFF
@@ -495,42 +493,42 @@ signoff:
   # Confirms: business purpose is accurate, out-of-scope behaviors are correctly
   # defined, and they accept business accountability for the agent's decisions.
   domain_owner:
-    name: [Full Name of Domain Owner]
-    date: "[YYYY-MM-DD]"               # Date of sign-off, not contract creation date
+    name: "Full Name of Domain Owner"
+    date: "2026-01-01"                 # Date of sign-off, not contract creation date
     confirmation: >
-      [Domain owner's statement confirming they have reviewed the contract and
+      Domain owner's statement confirming they have reviewed the contract and
       accept accountability for the business purpose, acceptable use boundaries,
-      and business outcomes. Should be specific to this agent's context, not generic.]
+      and business outcomes. Should be specific to this agent's context, not generic.
 
   # (REQUIRED) Sign-off from the technical owner.
   # Confirms: authority limits are enforced in code, data access is correctly
   # scoped, and the agent is operationally ready for production.
   technical_owner:
-    name: [Full Name of Technical Owner]
-    date: "[YYYY-MM-DD]"
+    name: "Full Name of Technical Owner"
+    date: "2026-01-01"
     confirmation: >
-      [Technical owner's statement confirming they have reviewed the contract and
+      Technical owner's statement confirming they have reviewed the contract and
       accept accountability for build quality, runtime behavior, and operational
       readiness. Should confirm that authority limits and prohibited actions are
-      enforced in production code, and that data access is scoped correctly.]
+      enforced in production code, and that data access is scoped correctly.
 
   # (OPTIONAL) Sign-off from the data owner. Required if data_owner is assigned
   # in the ownership section.
   # data_owner:
-  #   name: [Full Name of Data Owner]
-  #   date: "[YYYY-MM-DD]"
+  #   name: "Full Name of Data Owner"
+  #   date: "2026-01-01"
   #   confirmation: >
-  #     [Data owner's statement confirming permitted_sources are approved under
-  #     data governance policy and the retention policy is enforceable.]
+  #     Data owner's statement confirming permitted_sources are approved under
+  #     data governance policy and the retention policy is enforceable.
 
   # (OPTIONAL) Sign-off from the risk owner. Required if risk_owner is assigned
   # in the ownership section.
   # risk_owner:
-  #   name: [Full Name of Risk Owner]
-  #   date: "[YYYY-MM-DD]"
+  #   name: "Full Name of Risk Owner"
+  #   date: "2026-01-01"
   #   confirmation: >
-  #     [Risk owner's statement confirming risk tier, blast radius, and compliance
-  #     framework mappings are accurate and regulatory posture is accepted.]
+  #     Risk owner's statement confirming risk tier, blast radius, and compliance
+  #     framework mappings are accurate and regulatory posture is accepted.
 
 # =============================================================================
 # DEPENDENCIES — External models, services, and data sources.
@@ -540,23 +538,23 @@ signoff:
 dependencies:
   # (OPTIONAL) LLMs or ML models used by the agent.
   models:
-    - name: [Model Name]               # e.g., "GPT-4o", "Fraud Scoring Model"
-      version: "[model-version]"       # e.g., "gpt-4o-2024-11-20", "v3.2.1"
-      type: [llm|ml-model]
-      description: "[What this model is used for in this agent]"
+    - name: "Model Name"               # e.g., "GPT-4o", "Fraud Scoring Model"
+      version: "model-version"         # e.g., "gpt-4o-2024-11-20", "v3.2.1"
+      type: "llm"                      # Options: llm, ml-model
+      description: "What this model is used for in this agent"
 
   # (OPTIONAL) Internal or external services the agent calls.
   services:
-    - name: [Service Name]
-      version: "[v1.0]"
-      type: [rest-api|internal-api|kafka|grpc|graphql]
-      description: "[What this service provides and why it is needed]"
+    - name: "Service Name"
+      version: "v1.0"
+      type: "rest-api"                 # Options: rest-api, internal-api, kafka, grpc, graphql
+      description: "What this service provides and why it is needed"
 
   # (OPTIONAL) Databases, event streams, or datasets the agent reads from.
   data_sources:
-    - name: [Data Source Name]
-      type: [postgresql|mysql|s3|kafka|redis|vector-store|git]
-      description: "[What data this source provides and how it is used]"
+    - name: "Data Source Name"
+      type: "postgresql"               # Options: postgresql, mysql, s3, kafka, redis, vector-store, git
+      description: "What data this source provides and how it is used"
 
 # =============================================================================
 # SLA — Service level agreement for production operation.
@@ -566,14 +564,14 @@ sla:
   # (REQUIRED) Target availability as a NUMBER (not a string).
   # 99.9 means 99.9% uptime (~8.7 hours downtime/year).
   # 99.5 = ~43.8 hours/year. 95.0 = ~438 hours/year.
-  availability: [99.9]
+  availability: 99.9
 
   # (REQUIRED) Maximum acceptable end-to-end latency in milliseconds.
   # Must be an integer. Examples: 150 (real-time scoring), 3000 (checkout), 60000 (batch)
-  max_latency_ms: [5000]
+  max_latency_ms: 5000
 
   # (OPTIONAL) Maximum acceptable error rate as a human-readable string.
-  error_rate_threshold: "[0.5%]"
+  error_rate_threshold: "0.5%"
 
   # (OPTIONAL) Maximum request throughput as a human-readable string.
-  throughput_limit: "[1000 req/min]"
+  throughput_limit: "1000 req/min"

@@ -103,11 +103,21 @@ agent:
   domain: financial-services
 
 ownership:
-  primary_owner:
+  domain_owner:
     name: Jane Smith
     email: jane.smith@company.com
-    team: Payments Platform
-    org: Engineering
+    role: Director, Payments Platform
+    accountability:
+      - outcome_delivery
+      - business_impact
+  
+  technical_owner:
+    name: Marcus Johnson
+    email: marcus.johnson@company.com
+    role: Engineering Lead, Platform
+    accountability:
+      - build_quality
+      - runtime_behavior
 ```
 
 **Step 3: Fill in authority, accountability, governance, compliance, risk, and SLA sections**
@@ -134,6 +144,121 @@ git commit -m "feat: add agent ownership contract for payment processing agent"
 ```
 
 Add the [CI/CD workflow](.github/workflows/validate-contracts.yml) to validate all contracts on every pull request.
+
+---
+
+## AOF Ecosystem
+
+The Agent Ownership Framework connects four layers of the enterprise AI stack: the named humans who write and sign contracts, the contract itself with its eight governance boundaries, the systems that consume and enforce it at deploy-time and runtime, and the enterprise platforms that ingest it for audit, risk, and operations. The diagram below shows how each layer feeds the next — from a domain owner signing off, to a CI/CD gate blocking a broken contract, to a risk management platform receiving the blast radius assessment.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {
+  "primaryColor":       "#1E3A8A",
+  "primaryTextColor":   "#FFFFFF",
+  "primaryBorderColor": "#1E40AF",
+  "lineColor":          "#6B7280",
+  "secondaryColor":     "#F59E0B",
+  "tertiaryColor":      "#059669"
+}}}%%
+
+flowchart TD
+
+    subgraph CONTRIB["  👥  LAYER 1 · CONTRIBUTORS — Who Creates the Contract  "]
+        direction LR
+        DOM("🏢 Domain Owner\nBusiness accountability\n& acceptable use")
+        TEO("⚙️ Technical Owner\nBuild quality &\nruntime behavior")
+        DAO("🗄️ Data Owner\nData governance\n& retention policy")
+        RCO("⚖️ Risk Officer\nRegulatory exposure\n& audit readiness")
+    end
+
+    subgraph AOF["  📋  LAYER 2 · AGENT OWNERSHIP CONTRACT · aof/v1  "]
+        direction LR
+
+        subgraph IDENTITY["  Identity  "]
+            direction LR
+            MD["📄 Metadata\nname · version · dates"]
+            AG["🤖 Agent\nid · type · domain"]
+        end
+
+        subgraph BOUNDS["  Eight Governance Boundaries  "]
+            direction LR
+            PU["🎯 Purpose"]
+            OW["👤 Ownership"]
+            AU["⚡ Authority"]
+            DA["🗄️ Data"]
+            IR["🚨 Accountability"]
+            GV["🏛️ Governance"]
+            LC["🔄 Lifecycle"]
+            CP["✅ Compliance"]
+        end
+
+        subgraph CONTROL["  Risk · Approval · Operations  "]
+            direction LR
+            RK["⚠️ Risk"]
+            SG["✍️ Signoff"]
+            DP["🔗 Dependencies"]
+            TL["🛠️ Tools"]
+            SL["📊 SLA"]
+        end
+    end
+
+    subgraph CONS["  ⚡  LAYER 3 · CONSUMERS — Who Uses the Contract  "]
+        direction LR
+        CTL("🎛️ Control Planes\nDeploy gates")
+        CICD("🔁 CI/CD Pipelines\nValidation on every PR")
+        MON("📡 Runtime Monitoring\nSLA & alert routing")
+        INC("🚑 Incident Response\nEscalation & runbooks")
+        POL("🛡️ Policy Enforcement\nRuntime guardrails")
+    end
+
+    subgraph ENT["  🏛️  LAYER 4 · ENTERPRISE INTEGRATIONS  "]
+        direction LR
+        GS("🏛️ Governance\nSystems")
+        CA("📋 Compliance &\nAudit Tools")
+        RP("⚖️ Risk\nManagement")
+        EO("🏭 Enterprise\nOps")
+        SEC("🔒 Security\nTools")
+    end
+
+    DOM -->|"reviews &\nsigns off"| AOF
+    TEO -->|"reviews &\nsigns off"| AOF
+    DAO -->|"reviews &\nsigns off"| AOF
+    RCO -->|"reviews &\nsigns off"| AOF
+
+    AOF -->|"deploy gate\n& authority limits"| CTL
+    AOF -->|"schema validation\non every commit"| CICD
+    AOF -->|"SLA targets\n& alert thresholds"| MON
+    AOF -->|"escalation path\n& runbook reference"| INC
+    AOF -->|"permitted actions\n& data boundaries"| POL
+
+    CTL  --> GS
+    CICD --> GS
+    CICD --> CA
+    MON  --> EO
+    MON  --> SEC
+    INC  --> RP
+    INC  --> EO
+    POL  --> SEC
+    POL  --> CA
+
+    classDef contributor fill:#F59E0B,stroke:#B45309,color:#1C1917,font-weight:bold
+    classDef consumer    fill:#059669,stroke:#065F46,color:#FFFFFF,font-weight:bold
+    classDef enterprise  fill:#1E3A5F,stroke:#0F2340,color:#FFFFFF
+
+    class DOM,TEO,DAO,RCO contributor
+    class CTL,CICD,MON,INC,POL consumer
+    class GS,CA,RP,EO,SEC enterprise
+
+    style CONTRIB fill:#FEF3C7,stroke:#F59E0B,color:#1C1917
+    style AOF     fill:#1E3A8A,stroke:#1E40AF,color:#FFFFFF
+    style IDENTITY fill:#1D4ED8,stroke:#2563EB,color:#FFFFFF
+    style BOUNDS   fill:#2563EB,stroke:#3B82F6,color:#FFFFFF
+    style CONTROL  fill:#4C1D95,stroke:#6D28D9,color:#FFFFFF
+    style CONS    fill:#D1FAE5,stroke:#059669,color:#1C1917
+    style ENT     fill:#1E293B,stroke:#334155,color:#FFFFFF
+```
+
+See [docs/aof-ecosystem.md](docs/aof-ecosystem.md) for the full diagram with layer-by-layer descriptions, rendering instructions, and a color legend.
 
 ---
 
