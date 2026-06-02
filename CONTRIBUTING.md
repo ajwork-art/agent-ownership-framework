@@ -175,4 +175,4 @@ We respond to issues within a few business days.
 
 ---
 
-*Built by [Anitha Jagadeesh](https://substack.com/@anithaenterprisedataai) — Enterprise Data AI Realities on Substack.*
+*Built by [Anitha Jagadeesh](https://enterprisedataairealities.substack.com/) — Enterprise Data AI Realities on Substack.*
