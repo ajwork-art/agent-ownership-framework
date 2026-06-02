@@ -422,4 +422,4 @@ See [LICENSE](LICENSE) for full terms.
 
 ---
 
-*Built by [Anitha Jagadeesh](https://substack.com/@anithaenterprisedataai).*
+*Built by [Anitha Jagadeesh](https://enterprisedataairealities.substack.com/).*
