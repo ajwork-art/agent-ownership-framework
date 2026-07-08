@@ -6,35 +6,43 @@ Validation and CLI tooling for AOF v1 agent ownership contracts.
 
 ## AOF CLI (`aof`)
 
-A single command-line tool that wraps the validator and adds a governance boundary checklist.
-Run immediately with Python — no installation required.
+`aof` is an installable command that wraps the validator and adds a governance
+boundary checklist. It is packaged for both Python (`aof-validate` on PyPI) and
+Node.js (`aof-validate` on npm); both install a single `aof` command with the same
+verbs. AOF performs **deployment-time** validation and does not enforce policy at
+runtime.
 
-**Requirements:** Python 3.8+, pyyaml, jsonschema
+**Requirements:** Python 3.8+ (pyyaml, jsonschema) or Node.js 18+.
 
-### Quick start (no installation)
+### Install
+
+```bash
+# Python — from source today; `pip install aof-validate` once published
+pip install ./tools
+
+# Node.js — from source today; `npm install -g aof-validate` once published
+npm install -g ./tools
+```
+
+The bare `aof` name is taken by unrelated projects on PyPI and npm, so the
+distribution is named **`aof-validate`**; the installed command is still `aof`.
+
+### Run without installing
 
 ```bash
 cd tools
-pip install -r requirements.txt
+pip install -r requirements.txt   # or: pip install -e '.[dev]'
 
-python aof validate examples/support-agent.yaml
-python aof create my-payment-agent.yaml
-python aof check my-payment-agent.yaml
+python -m aof validate ../examples/support-agent.yaml
+python -m aof create  my-payment-agent.yaml
+python -m aof check   my-payment-agent.yaml
+
+# Node equivalent:
+node bin/aof.js validate ../examples/support-agent.yaml
 ```
 
-### Install as a system command
-
-```bash
-pip install -e tools/
-# Now available anywhere:
-aof validate my-agent.yaml
-```
-
-Or on Windows:
-```
-pip install tools\
-aof validate my-agent.yaml
-```
+The `validate` verb accepts a file, a directory (searched recursively for
+`*.yaml` / `*.yml`), or a glob, and supports `--strict` and `--output json`.
 
 ---
 
@@ -174,9 +182,11 @@ Exit code `0` = schema valid and all 8 boundaries satisfied, `1` = any issue fou
 
 ---
 
-## Python Validator (`validate-contract.py`)
+## Python Validator (`validate-contract.py`) — deprecated
 
-The underlying validator used by the CLI. Can also be run directly.
+> **Deprecated.** This standalone script is kept for backward compatibility and now
+> prints a deprecation notice and delegates to the `aof` package. Use `aof validate`
+> instead. The core validation logic lives in `aof/validator.py`.
 
 **Requirements:** Python 3.8+, pyyaml, jsonschema
 
@@ -223,7 +233,10 @@ python validate-contract.py --help
 
 ---
 
-## Node.js Validator (`validate-contract.js`)
+## Node.js Validator (`validate-contract.js`) — deprecated
+
+> **Deprecated.** This standalone script is kept for backward compatibility and now
+> delegates to `lib/validator.js`. Use `aof validate` (via `bin/aof.js`) instead.
 
 **Requirements:** Node.js 18+
 
@@ -327,8 +340,17 @@ npm test   # Validates all examples
 ```yaml
 - name: Validate AOF contracts
   run: |
-    pip install pyyaml jsonschema
-    python tools/aof validate examples/*.yaml
+    pip install ./tools
+    aof validate examples
+```
+
+Or use the composite action directly:
+
+```yaml
+- uses: ajwork-art/agent-ownership-framework@v1
+  with:
+    contracts: examples
+    strict: "true"
 ```
 
 See [ci-cd/github-actions-validate.yml](../ci-cd/github-actions-validate.yml) for the full workflow.
@@ -340,7 +362,7 @@ See [ci-cd/github-actions-validate.yml](../ci-cd/github-actions-validate.yml) fo
 #!/bin/bash
 changed_yamls=$(git diff --cached --name-only --diff-filter=ACM | grep ".*\.yaml")
 if [ -n "$changed_yamls" ]; then
-    python tools/aof validate $changed_yamls
+    aof validate $changed_yamls
     if [ $? -ne 0 ]; then
         echo "Contract validation failed. Fix errors before committing."
         exit 1

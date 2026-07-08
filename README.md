@@ -72,6 +72,50 @@ If you cannot answer all eight, you are not ready to deploy.
 
 ---
 
+## Installation
+
+The validator ships as an installable package in two ecosystems. Both install a
+single `aof` command with matching verbs (`aof validate`, `aof check`). AOF performs
+**deployment-time** contract validation — it does not enforce policy at runtime.
+
+**Python (`aof-validate`, installs the `aof` command):**
+
+```bash
+# From source (works today, from a checkout of this repo):
+pip install ./tools
+
+# Once published to PyPI:
+pip install aof-validate
+```
+
+**Node.js (`aof-validate`, installs the `aof` command):**
+
+```bash
+# From source (works today, from a checkout of this repo):
+npm install -g ./tools
+
+# Once published to npm:
+npm install -g aof-validate
+```
+
+> **Package names.** The bare `aof` name is already taken by unrelated projects on
+> both PyPI and npm, so the distribution is published as **`aof-validate`**. The
+> installed command is still `aof`. The Python and Node packages are prepared for
+> publication but are not yet on the public registries; until then, install from
+> source as shown above.
+
+Verify the install:
+
+```bash
+aof --version
+aof validate examples          # validate every contract in a directory
+```
+
+The standalone scripts (`tools/validate-contract.py`, `tools/validate-contract.js`)
+still work but are **deprecated** in favor of the `aof` command.
+
+---
+
 ## Quick Start
 
 **Step 1: Copy the template**
@@ -126,14 +170,11 @@ See [examples/fraud-detection-agent.yaml](examples/fraud-detection-agent.yaml) f
 
 **Step 4: Validate your contract**
 
-```bash
-# Python
-cd tools && pip install -r requirements.txt
-python validate-contract.py ../my-agent-contract.yaml
+Install the `aof` command (see [Installation](#installation)), then:
 
-# Node.js
-cd tools && npm install
-node validate-contract.js ../my-agent-contract.yaml
+```bash
+aof validate my-agent-contract.yaml     # a file, a directory, or a glob
+aof check my-agent-contract.yaml        # eight-boundary governance checklist
 ```
 
 **Step 5: Commit and enforce**
@@ -144,6 +185,57 @@ git commit -m "feat: add agent ownership contract for payment processing agent"
 ```
 
 Add the [CI/CD workflow](.github/workflows/ci.yml) to validate all contracts on every pull request.
+
+---
+
+## GitHub Action
+
+This repository ships a composite GitHub Action ([`action.yml`](action.yml)) that
+runs `aof validate` against a configurable contracts directory. It performs
+**deployment-time** validation only; it does not enforce policy at runtime.
+
+**Usage in a consumer repository:**
+
+```yaml
+# .github/workflows/aof.yml
+name: Validate AOF contracts
+on: [push, pull_request]
+
+jobs:
+  aof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ajwork-art/agent-ownership-framework@v1
+        with:
+          contracts: contracts   # file, directory, or glob (default: contracts)
+          strict: "true"         # fail if no contracts are found (default: false)
+```
+
+**Inputs:**
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `contracts` | no | `contracts` | Path, directory, or glob of contract YAML files. Directories are searched recursively for `*.yaml` / `*.yml`. |
+| `strict` | no | `false` | If `true`, fail when no contract files are found under `contracts`. |
+| `python-version` | no | `3.11` | Python version used to run the validator. |
+
+### Publishing to the GitHub Marketplace
+
+The action is prepared for a Marketplace listing but is **not yet published**. To
+list it:
+
+1. Ensure `action.yml` is at the repository root (it is), with `name`, `description`,
+   and a `branding` block (icon `check-circle`, color `blue`).
+2. Create a release whose tag is a semantic version (for example `v1`), and check
+   **"Publish this Action to the GitHub Marketplace"** in the release UI.
+3. Choose categories such as *Code quality* and *Continuous integration*.
+
+Suggested Marketplace copy:
+
+> **AOF Validate** — Validate machine-readable AI agent ownership contracts on every
+> push and pull request. Deployment-time governance validation for who owns an agent,
+> what it is authorized to do, and how it is governed. Does not enforce policy at runtime.
 
 ---
 
@@ -281,6 +373,8 @@ agent-ownership-framework/
 ├── README.md                          # This file
 ├── LICENSE                            # MIT License
 ├── CONTRIBUTING.md                    # Contribution guidelines
+├── CHANGELOG.md                       # Keep a Changelog history
+├── action.yml                         # Composite GitHub Action (aof validate)
 │
 ├── schema/
 │   ├── README.md                      # Schema documentation
@@ -298,10 +392,15 @@ agent-ownership-framework/
 │
 ├── tools/
 │   ├── README.md                      # Tool documentation
-│   ├── validate-contract.py           # Python validator
-│   ├── validate-contract.js           # Node.js validator
-│   ├── requirements.txt               # Python dependencies
-│   └── package.json                   # Node.js dependencies
+│   ├── pyproject.toml                 # Python package (aof-validate → `aof`)
+│   ├── aof/                           # Python package sources + bundled schema
+│   ├── tests/                         # Python (pytest) tests
+│   ├── package.json                   # Node package (aof-validate → `aof`)
+│   ├── bin/aof.js                     # Node `aof` CLI entry point
+│   ├── lib/validator.js               # Node validator core
+│   ├── test/                          # Node (node:test) tests
+│   ├── validate-contract.py           # Deprecated standalone Python script
+│   └── validate-contract.js           # Deprecated standalone Node script
 │
 ├── docs/
 │   ├── FRAMEWORK.md                   # Framework concepts and walkthrough
@@ -360,12 +459,12 @@ Five production-realistic examples covering the most common enterprise agent pat
 
 ## Validation Tools
 
-| Tool | Language | Install |
-|------|----------|---------|
-| [validate-contract.py](tools/validate-contract.py) | Python 3.8+ | `pip install -r tools/requirements.txt` |
-| [validate-contract.js](tools/validate-contract.js) | Node.js 18+ | `npm install` in `tools/` |
+| Package | Language | Install | Command |
+|---------|----------|---------|---------|
+| [`aof-validate`](tools/pyproject.toml) | Python 3.8+ | `pip install ./tools` | `aof validate` |
+| [`aof-validate`](tools/package.json) | Node.js 18+ | `npm install -g ./tools` | `aof validate` |
 
-Both tools validate against the JSON Schema, check email formats, verify SLA ranges, and confirm escalation path sequencing.
+Both packages validate against the JSON Schema, check email and date formats, verify SLA ranges, and confirm escalation path sequencing. See [Installation](#installation) for details. The `aof validate` verb accepts a file, a directory (searched recursively), or a glob, and supports `--strict` and `--output json`.
 
 ---
 

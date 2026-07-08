@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Installable Python package** `aof-validate` (`tools/pyproject.toml`) exposing the
+  `aof` command with `validate`, `check`, `create`, and a stubbed `export` subcommand.
+  `aof validate` accepts a file, a directory (searched recursively), or a glob, and
+  supports `--strict` and `--output json`. The JSON Schema is bundled as package data
+  (a test asserts it stays byte-identical to `schema/v1/`).
+- **Installable Node package** `aof-validate` (`tools/package.json`) with an `aof` bin
+  exposing the matching verbs (`validate` implemented; `check`/`create`/`export` stubbed).
+- **Composite GitHub Action** (`action.yml`) that runs `aof validate` against a
+  configurable `contracts` directory, with `strict` and `python-version` inputs, plus
+  README usage and GitHub Marketplace listing instructions.
+- **Test suites**: pytest (`tools/tests/`) and `node:test` (`tools/test/`), both run in CI.
+- README **Installation** and **GitHub Action** sections.
+
+### Changed
+- CI now installs the packages, runs both test suites, exercises the `aof` CLI against
+  every example and the annotated schema example, and runs the composite action
+  end-to-end.
+- The standalone `tools/validate-contract.py` and `tools/validate-contract.js` are now
+  thin **deprecated** shims that delegate to the packaged core and print a deprecation
+  notice; their historical interfaces still work.
+
+### Removed
+- `tools/setup.py` (superseded by `tools/pyproject.toml`) and the standalone
+  `tools/aof` script (its logic moved into the `aof` package).
+
 ## [1.0.0] - 2026-07-07
 
 Initial public release of the Agent Ownership Framework — an open standard for
