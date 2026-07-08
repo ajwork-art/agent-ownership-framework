@@ -34,12 +34,20 @@ def gpg_available() -> bool:
     return shutil.which("gpg") is not None
 
 
-def verify_gpg(contract_path: str, signature_path: str) -> Tuple[bool, str]:
+def verify_gpg(
+    contract_path: str,
+    signature_path: str,
+    env: Optional[dict] = None,
+) -> Tuple[bool, str]:
     """Verify a detached GPG signature over ``contract_path``.
 
     Returns (ok, message). Requires the signer's public key to already be in the
     local GnuPG keyring; key distribution and trust are the operator's
     responsibility.
+
+    ``env`` overrides the subprocess environment (useful for tests that use an
+    isolated GNUPGHOME without mutating os.environ). When None the current process
+    environment is inherited.
     """
     if not gpg_available():
         return False, "gpg is not installed — install GnuPG to verify signatures."
@@ -52,6 +60,7 @@ def verify_gpg(contract_path: str, signature_path: str) -> Tuple[bool, str]:
         proc = subprocess.run(
             ["gpg", "--verify", signature_path, contract_path],
             capture_output=True, text=True, timeout=30,
+            env=env,
         )
     except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
         return False, f"gpg invocation failed: {e}"

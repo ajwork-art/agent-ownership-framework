@@ -261,10 +261,10 @@ def test_verify_gpg_roundtrip(tmp_path, contract):
     assert sign.returncode == 0, sign.stderr
 
     # verify_gpg respects GNUPGHOME via the environment.
-    ok_sig, message = gpgverify.verify_gpg(str(contract_file), sig)
+    ok_sig, message = gpgverify.verify_gpg(str(contract_file), sig, env=env)
     assert ok_sig, message
 
     # Tampering breaks verification.
     contract_file.write_text(yaml.safe_dump(contract) + "\n# tampered\n")
-    ok_sig2, _ = gpgverify.verify_gpg(str(contract_file), sig)
+    ok_sig2, _ = gpgverify.verify_gpg(str(contract_file), sig, env=env)
     assert ok_sig2 is False
