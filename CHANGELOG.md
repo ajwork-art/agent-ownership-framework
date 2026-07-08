@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-08
+
+Second major release: the validator becomes an installable `aof` CLI (Python + Node) and
+a GitHub Action; adds v2 governance capabilities (lifecycle enforcement, `aof scan`,
+`aof diff`, `aof verify`, `aof export`) and the optional additive `schema_version` field.
+Fully backward compatible — every valid v1 contract still validates. AOF remains
+deployment-time validation and generates policy inputs; it does not enforce at runtime.
+
 ### Added
 
 _Packaging (Phase 2)_
@@ -43,6 +51,14 @@ _v2 capabilities (Phase 3)_
   not enforce at runtime.
 - **Test suites**: pytest (`tools/tests/`) and `node:test` (`tools/test/`), both run in CI.
 
+_Documentation & examples (Phase 4)_
+- **MIGRATION.md** — v1 → v2 guide (v1 stays valid, opting into v2 fields, adopting signing).
+- **ROADMAP.md** — placeholder for the maintainer, capturing known future work.
+- **Two v2 example contracts**: `examples/retention-sweeper-agent.yaml` (lifecycle dates +
+  four-role sign-off) and `examples/orchestrator-agent.yaml` (an orchestrator modeled via
+  `dependencies`, with first-class multi-agent modeling noted as future work).
+- README **v1 → v2** section, **CLI reference**, and refreshed badges.
+
 ### Changed
 - CI installs the packages, runs both test suites, exercises the `aof` CLI against every
   example and the annotated schema example, and runs the composite action end-to-end.
@@ -52,6 +68,13 @@ _v2 capabilities (Phase 3)_
 - `schema_version` added to the JSON Schema (and the bundled copy) as an optional
   property; the annotated example and the five example contracts had their governance
   review dates refreshed so they are current.
+- The `a2a-card` export note now states explicitly that it is an experimental **draft
+  mapping**, not a publish-ready Agent Card.
+- `examples/README.md` modernized to `aof` commands and real schema field names.
+
+### Fixed
+- Markdown exporter now renders escalation paths with their actual numeric levels
+  (`1.`, `2.`, `3.`) instead of a repeated `1.`.
 
 ### Removed
 - `tools/setup.py` (superseded by `tools/pyproject.toml`) and the standalone
@@ -89,5 +112,6 @@ machine-readable agent ownership contracts and deployment-time contract validati
   diagram.
 - **This `CHANGELOG.md`.**
 
-[Unreleased]: https://github.com/ajwork-art/agent-ownership-framework/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ajwork-art/agent-ownership-framework/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/ajwork-art/agent-ownership-framework/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/ajwork-art/agent-ownership-framework/releases/tag/v1.0.0

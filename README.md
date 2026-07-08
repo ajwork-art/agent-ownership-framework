@@ -8,8 +8,10 @@ Published under the MIT License.
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ajwork-art/agent-ownership-framework/releases)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/ajwork-art/agent-ownership-framework/releases)
 [![CI](https://github.com/ajwork-art/agent-ownership-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/ajwork-art/agent-ownership-framework/actions/workflows/ci.yml)
+[![Schema: v1 + v2 compatible](https://img.shields.io/badge/schema-v1%20%2B%20v2%20compatible-blue.svg)](docs/SCHEMA.md)
+[![Migration guide](https://img.shields.io/badge/docs-MIGRATION-blue.svg)](MIGRATION.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **An agent is a product with delegated authority.** Treat it like one.
@@ -238,6 +240,35 @@ Suggested Marketplace copy:
 > what it is authorized to do, and how it is governed. Does not enforce policy at runtime.
 
 ---
+
+## v1 → v2: what changed
+
+v2 is **fully backward compatible** — every valid v1 contract still validates, and
+no new fields are required. See [MIGRATION.md](MIGRATION.md) for the full guide.
+
+- **Tooling is packaged.** The validator ships as the installable `aof` command
+  (Python `aof-validate`, Node `aof-validate`); the standalone scripts are deprecated.
+- **New optional field:** `schema_version` (absent ⇒ `1.0`, with an informational
+  notice — never an error).
+- **New commands:** `aof scan`, `aof diff`, `aof verify`, `aof export`, plus
+  lifecycle enforcement and `--strict` in `aof validate`.
+- **Same scope.** AOF still validates at deployment time and generates policy
+  *inputs*; it does not enforce policy at runtime.
+
+## CLI reference
+
+All commands are deployment-time tooling. `aof validate` is available in both the
+Python and Node packages; the rest are provided by the Python package.
+
+| Command | What it does |
+|---------|--------------|
+| `aof validate <path> [--strict] [--output json]` | Validate a file/dir/glob against the schema + semantic + lifecycle checks. `--strict` fails on lifecycle warnings or no files found. |
+| `aof check <file>` | Human-readable eight-boundary governance checklist. |
+| `aof create <name.yaml>` | Scaffold a new contract from the template. |
+| `aof scan <dir> [--json]` | Fleet inventory: per-contract status, owners, coverage stats. |
+| `aof diff <old> <new> [--require-reapproval]` | Semantic diff; classify material vs cosmetic changes. |
+| `aof verify <file> [--signature SIG]` | Optional detached GPG signature verification. |
+| `aof export --format markdown\|a2a-card\|opa <file> [-o OUT]` | Generate an ownership card, an experimental A2A card, or a Rego policy stub. |
 
 ## v2 capabilities
 
@@ -489,6 +520,8 @@ agent-ownership-framework/
 
 | Document | Description |
 |----------|-------------|
+| [MIGRATION.md](MIGRATION.md) | v1 → v2 migration: v1 stays valid, opting into v2 fields, adopting signing |
+| [ROADMAP.md](ROADMAP.md) | Planned direction and future work |
 | [docs/FRAMEWORK.md](docs/FRAMEWORK.md) | Framework concepts, the delegation problem, ownership failure patterns, agent lifecycle |
 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md) | The four core AOF principles with schema field mappings |
 | [docs/SCHEMA.md](docs/SCHEMA.md) | Complete field-by-field reference for every schema section |
@@ -504,7 +537,9 @@ agent-ownership-framework/
 
 ## Examples
 
-Five production-realistic examples covering the most common enterprise agent patterns:
+Production-realistic examples covering common enterprise agent patterns. The last two
+exercise v2 fields (`schema_version`, lifecycle dates, four-role sign-off, and an
+orchestrator modeled via dependencies).
 
 | Example | Domain | Risk Tier | Type | Key Compliance |
 |---------|--------|-----------|------|----------------|
@@ -513,6 +548,8 @@ Five production-realistic examples covering the most common enterprise agent pat
 | [fraud-detection-agent.yaml](examples/fraud-detection-agent.yaml) | Financial Services | Critical | Autonomous | PCI-DSS, BSA-AML, SOX, GLBA |
 | [risk-analysis-agent.yaml](examples/risk-analysis-agent.yaml) | Risk Management | High | Advisory | GDPR, SOX, FCRA, GLBA |
 | [internal-tool-agent.yaml](examples/internal-tool-agent.yaml) | Internal Tooling | Low | Autonomous | Internal policy only |
+| [retention-sweeper-agent.yaml](examples/retention-sweeper-agent.yaml) **(v2)** | Data Governance | High | Autonomous | GDPR, SOX |
+| [orchestrator-agent.yaml](examples/orchestrator-agent.yaml) **(v2)** | Insurance Operations | High | Hybrid | SOX, NAIC |
 
 ---
 
