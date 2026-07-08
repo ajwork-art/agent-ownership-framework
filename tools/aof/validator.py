@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -174,48 +175,217 @@ def semantic_checks(contract: Dict[str, Any]) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
+# schema_version (v2, additive) and lifecycle enforcement
+# ---------------------------------------------------------------------------
+
+DEFAULT_SCHEMA_VERSION = "1.0"
+
+
+def schema_version_of(contract: Dict[str, Any]) -> str:
+    """Return the declared schema_version, defaulting to 1.0 when absent."""
+    value = contract.get("schema_version")
+    return value if isinstance(value, str) and value else DEFAULT_SCHEMA_VERSION
+
+
+def schema_version_notice(contract: Dict[str, Any]) -> Optional[str]:
+    """Informational (never an error) notice for contracts without schema_version.
+
+    Backward compatibility: a valid v1 contract must still validate under v2.
+    """
+    if not contract.get("schema_version"):
+        return (
+            f"schema_version not declared — assuming {DEFAULT_SCHEMA_VERSION} (v1). "
+            "All v2 fields are optional; this contract is valid."
+        )
+    return None
+
+
+def _parse_iso_date(value: Any) -> Optional[date]:
+    """Parse an ISO 8601 (YYYY-MM-DD) date string, or return None."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def lifecycle_checks(contract: Dict[str, Any], today: Optional[date] = None) -> List[str]:
+    """Flag contracts whose lifecycle/governance dates have passed.
+
+    Returns a list of warning strings. Warnings never fail validation on their
+    own; ``aof validate --strict`` promotes them to failures (CI-blocking).
+    Only explicit date fields are evaluated (no cadence arithmetic).
+    """
+    if today is None:
+        today = date.today()
+
+    warnings: List[str] = []
+    status = None
+    lifecycle = contract.get("lifecycle", {})
+    if isinstance(lifecycle, dict):
+        status = lifecycle.get("status")
+
+    def _overdue(value: Any, label: str, message: str) -> None:
+        d = _parse_iso_date(value)
+        if d is not None and d < today:
+            warnings.append(f"{label} {d.isoformat()} {message}")
+
+    governance = contract.get("governance", {})
+    if isinstance(governance, dict):
+        _overdue(governance.get("next_review"), "governance.next_review",
+                 "is in the past — governance review overdue")
+
+    if isinstance(lifecycle, dict):
+        if status != "retired":
+            _overdue(lifecycle.get("retirement_date"), "lifecycle.retirement_date",
+                     f"has passed but status is '{status}' — agent should be retired")
+        retirement = lifecycle.get("retirement", {})
+        if isinstance(retirement, dict):
+            if status != "retired":
+                _overdue(retirement.get("sunset_date"), "lifecycle.retirement.sunset_date",
+                         f"has passed but status is '{status}' — agent should be retired")
+            _overdue(retirement.get("planned_review_date"),
+                     "lifecycle.retirement.planned_review_date",
+                     "has passed — retirement decision review overdue")
+
+    return warnings
+
+
+# ---------------------------------------------------------------------------
 # Core validation
 # ---------------------------------------------------------------------------
+
+def evaluate_file(
+    filepath: str,
+    schema: Dict[str, Any],
+    today: Optional[date] = None,
+) -> Dict[str, Any]:
+    """Validate a contract file and gather errors, warnings, notices, and the
+    parsed contract in a single pass.
+
+    Returns a dict with keys: ``file``, ``errors`` (schema + semantic — always
+    fail), ``warnings`` (lifecycle — fail only under ``--strict``), ``notices``
+    (informational, never fail), and ``contract`` (parsed mapping or None).
+    """
+    result: Dict[str, Any] = {
+        "file": filepath,
+        "errors": [],
+        "warnings": [],
+        "notices": [],
+        "contract": None,
+    }
+
+    if not os.path.exists(filepath):
+        result["errors"].append(f"File not found: {filepath}")
+        return result
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            contract = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        result["errors"].append(f"YAML parse error: {e}")
+        return result
+
+    if not isinstance(contract, dict):
+        result["errors"].append("File does not contain a YAML mapping (expected top-level object)")
+        return result
+
+    result["contract"] = contract
+
+    validator = Draft7Validator(schema)
+    for err in sorted(validator.iter_errors(contract), key=lambda e: str(e.path)):
+        field_path = ".".join(str(p) for p in err.absolute_path) if err.absolute_path else "(root)"
+        result["errors"].append(f"Schema: [{field_path}] {err.message}")
+
+    result["errors"].extend(f"Semantic: {e}" for e in semantic_checks(contract))
+    result["warnings"].extend(lifecycle_checks(contract, today))
+    notice = schema_version_notice(contract)
+    if notice:
+        result["notices"].append(notice)
+
+    return result
+
+
+def result_passed(result: Dict[str, Any], strict: bool = False) -> bool:
+    """A result passes if it has no errors (and, under strict, no warnings)."""
+    if result["errors"]:
+        return False
+    if strict and result["warnings"]:
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Inventory helpers (used by `aof scan`)
+# ---------------------------------------------------------------------------
+
+def signoff_complete(contract: Dict[str, Any]) -> bool:
+    """True if both the domain and technical owners have signed the contract."""
+    signoff = contract.get("signoff", {})
+    if not isinstance(signoff, dict):
+        return False
+    for role in ("domain_owner", "technical_owner"):
+        entry = signoff.get(role, {})
+        if not isinstance(entry, dict) or not str(entry.get("name", "")).strip():
+            return False
+    return True
+
+
+def owners_summary(contract: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    """Extract the named domain/technical owners for inventory reporting."""
+    ownership = contract.get("ownership", {})
+    ownership = ownership if isinstance(ownership, dict) else {}
+
+    def _owner(key: str) -> Optional[str]:
+        owner = ownership.get(key, {})
+        if isinstance(owner, dict):
+            name = str(owner.get("name", "")).strip()
+            email = str(owner.get("email", "")).strip()
+            if name and email:
+                return f"{name} <{email}>"
+            if name:
+                return name
+        return None
+
+    return {
+        "domain_owner": _owner("domain_owner"),
+        "technical_owner": _owner("technical_owner"),
+    }
+
+
+def contract_status(result: Dict[str, Any]) -> str:
+    """Classify a contract for fleet inventory.
+
+    One of: 'invalid' (schema/semantic errors), 'expired' (lifecycle dates
+    overdue), 'unsigned' (missing domain/technical signoff), or 'valid'.
+    Precedence: invalid > expired > unsigned > valid.
+    """
+    if result["errors"]:
+        return "invalid"
+    contract = result.get("contract") or {}
+    if result["warnings"]:
+        return "expired"
+    if not signoff_complete(contract):
+        return "unsigned"
+    return "valid"
+
 
 def validate_file(
     filepath: str,
     schema: Dict[str, Any],
     verbose: bool = False,
 ) -> Tuple[bool, List[str]]:
-    """Validate a single YAML contract file. Returns (passed, errors)."""
-    errors: List[str] = []
+    """Validate a single YAML contract file. Returns (passed, errors).
 
-    if not os.path.exists(filepath):
-        return False, [f"File not found: {filepath}"]
-
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            contract = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        return False, [f"YAML parse error: {e}"]
-
-    if not isinstance(contract, dict):
-        return False, ["File does not contain a YAML mapping (expected top-level object)"]
-
-    if verbose:
-        print(f"  {ok('YAML parsed successfully')}")
-
-    validator = Draft7Validator(schema)
-    schema_errors = sorted(validator.iter_errors(contract), key=lambda e: str(e.path))
-
-    if schema_errors:
-        for err in schema_errors:
-            field_path = ".".join(str(p) for p in err.absolute_path) if err.absolute_path else "(root)"
-            errors.append(f"Schema: [{field_path}] {err.message}")
-    elif verbose:
-        print(f"  {ok('JSON Schema validation passed')}")
-
-    semantic_errors = semantic_checks(contract)
-    if semantic_errors:
-        errors.extend([f"Semantic: {e}" for e in semantic_errors])
-    elif verbose:
-        print(f"  {ok('Semantic checks passed')}")
-
+    Errors are schema + semantic only; lifecycle warnings never fail this call
+    (use ``evaluate_file`` for warnings/notices). Kept stable for callers that
+    predate v2.
+    """
+    result = evaluate_file(filepath, schema)
+    errors = result["errors"]
+    if verbose and not errors:
+        print(f"  {ok('YAML parsed, schema and semantic checks passed')}")
     return len(errors) == 0, errors
 
 

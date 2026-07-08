@@ -19,14 +19,18 @@ License: MIT
 """
 
 import argparse
+import json
 import os
 import shutil
 import sys
-from typing import List
+from typing import Any, Dict, List
 
 from . import __version__
 from . import validator as V
 from .boundaries import run_all_boundaries
+from . import diff as D
+from . import exporters
+from . import verify as gpgverify
 
 RESET = V.RESET
 BOLD = V.BOLD
@@ -54,6 +58,21 @@ def _template_path() -> str:
 # aof validate
 # ---------------------------------------------------------------------------
 
+def _print_result_text(result: Dict[str, Any], passed: bool, strict: bool) -> None:
+    name = os.path.basename(result["file"])
+    if passed:
+        print(V.ok(f"{BOLD}{name}{RESET}"))
+    else:
+        print(V.fail(f"{BOLD}{name}{RESET}"))
+    for e in result["errors"]:
+        print(f"    {RED}→{RESET} {e}")
+    strict_tag = f" {DIM}(fails under --strict){RESET}" if not strict else ""
+    for w in result["warnings"]:
+        print(f"    {YELLOW}!{RESET} {w}{strict_tag}")
+    for n in result["notices"]:
+        print(f"    {DIM}· {n}{RESET}")
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     try:
         schema = V.load_schema()
@@ -74,21 +93,41 @@ def cmd_validate(args: argparse.Namespace) -> int:
     results = []
     any_failed = False
     for filepath in files:
-        passed, errors = V.validate_file(filepath, schema, verbose=args.verbose)
+        r = V.evaluate_file(filepath, schema)
+        passed = V.result_passed(r, strict=args.strict)
         if not passed:
             any_failed = True
-        results.append({"file": filepath, "passed": passed, "errors": errors})
+        results.append({
+            "file": filepath,
+            "passed": passed,
+            "status": V.contract_status(r),
+            "schema_version": V.schema_version_of(r["contract"]) if r["contract"] else None,
+            "errors": r["errors"],
+            "warnings": r["warnings"],
+            "notices": r["notices"],
+        })
         if args.output == "text":
-            V.print_result(filepath, passed, errors)
+            _print_result_text(r, passed, args.strict)
 
     total = len(results)
     failed = sum(1 for r in results if not r["passed"])
+    warned = sum(1 for r in results if r["warnings"])
+
     if args.output == "json":
-        print(V.format_json_output(results))
+        print(json.dumps({
+            "aof": __version__,
+            "strict": args.strict,
+            "total": total,
+            "passed": total - failed,
+            "failed": failed,
+            "with_warnings": warned,
+            "results": results,
+        }, indent=2))
     else:
         print()
         if failed == 0:
-            print(V.ok(f"All {total} contract(s) valid"))
+            suffix = f" ({warned} with warnings)" if warned and not args.strict else ""
+            print(V.ok(f"All {total} contract(s) valid{suffix}"))
         else:
             print(V.fail(f"{failed}/{total} contract(s) failed validation"))
 
@@ -217,21 +256,195 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# aof export  (Phase 3 stub)
+# aof scan  (fleet inventory)
+# ---------------------------------------------------------------------------
+
+_STATUS_STYLE = {
+    "valid": GREEN,
+    "unsigned": YELLOW,
+    "expired": YELLOW,
+    "invalid": RED,
+}
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    try:
+        schema = V.load_schema()
+    except FileNotFoundError as e:
+        print(V.fail(f"Cannot load schema: {e}"), file=sys.stderr)
+        return 1
+
+    files = V.expand_paths(args.paths)
+    rows = []
+    for filepath in files:
+        r = V.evaluate_file(filepath, schema)
+        contract = r["contract"] or {}
+        owners = V.owners_summary(contract)
+        agent = contract.get("agent", {}) if isinstance(contract.get("agent"), dict) else {}
+        rows.append({
+            "file": filepath,
+            "agent_id": agent.get("id"),
+            "status": V.contract_status(r),
+            "signed": V.signoff_complete(contract),
+            "domain_owner": owners["domain_owner"],
+            "technical_owner": owners["technical_owner"],
+            "schema_version": V.schema_version_of(contract) if r["contract"] else None,
+            "warnings": r["warnings"],
+            "errors": r["errors"],
+        })
+
+    counts = {s: sum(1 for row in rows if row["status"] == s)
+              for s in ("valid", "unsigned", "expired", "invalid")}
+    no_owner = sum(1 for row in rows if not row["domain_owner"])
+    unsigned = sum(1 for row in rows if not row["signed"])
+    summary = {
+        "total": len(rows),
+        "by_status": counts,
+        "missing_domain_owner": no_owner,
+        "unsigned": unsigned,
+    }
+
+    if args.json:
+        print(json.dumps({"aof": __version__, "summary": summary, "contracts": rows}, indent=2))
+        return 1 if counts["invalid"] else 0
+
+    if not rows:
+        print(V.warn(f"No contracts found under: {', '.join(args.paths)}"))
+        return 0
+
+    id_w = max([len(str(r["agent_id"] or "?")) for r in rows] + [8])
+    own_w = max([len(str(r["domain_owner"] or "—")) for r in rows] + [12])
+    print(f"{BOLD}{'AGENT':<{id_w}}  {'STATUS':<9}  {'SIGNED':<6}  {'DOMAIN OWNER':<{own_w}}{RESET}")
+    print("─" * (id_w + own_w + 27))
+    for r in rows:
+        style = _STATUS_STYLE.get(r["status"], "")
+        signed = "yes" if r["signed"] else "NO"
+        print(f"{str(r['agent_id'] or '?'):<{id_w}}  "
+              f"{style}{r['status']:<9}{RESET}  {signed:<6}  {str(r['domain_owner'] or '—'):<{own_w}}")
+
+    print()
+    print(f"{BOLD}Fleet summary:{RESET} {summary['total']} contract(s) — "
+          f"{GREEN}{counts['valid']} valid{RESET}, "
+          f"{YELLOW}{counts['unsigned']} unsigned{RESET}, "
+          f"{YELLOW}{counts['expired']} expired{RESET}, "
+          f"{RED}{counts['invalid']} invalid{RESET}")
+    print(f"  {no_owner} without a named domain owner · {unsigned} without complete sign-off")
+    return 1 if counts["invalid"] else 0
+
+
+# ---------------------------------------------------------------------------
+# aof diff  (semantic diff)
+# ---------------------------------------------------------------------------
+
+def _load_yaml(path: str):
+    import yaml
+    if not os.path.exists(path):
+        print(f"{RED}ERROR:{RESET} File not found: {path}", file=sys.stderr)
+        return None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except yaml.YAMLError as e:
+        print(f"{RED}ERROR:{RESET} YAML parse error in {path}:\n  {e}", file=sys.stderr)
+        return None
+    if not isinstance(data, dict):
+        print(f"{RED}ERROR:{RESET} {path} is not a YAML mapping.", file=sys.stderr)
+        return None
+    return data
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    old = _load_yaml(args.old)
+    new = _load_yaml(args.new)
+    if old is None or new is None:
+        return 1
+
+    result = D.diff_contracts(old, new)
+    material = result["material"]
+    cosmetic = result["cosmetic"]
+
+    if args.json:
+        print(json.dumps({
+            "material": material,
+            "cosmetic": cosmetic,
+            "signoff_changed": result["signoff_changed"],
+        }, indent=2))
+    else:
+        print(f"{BOLD}Semantic diff: {os.path.basename(args.old)} → {os.path.basename(args.new)}{RESET}")
+        print()
+        if not material and not cosmetic:
+            print(V.ok("No differences."))
+        else:
+            print(f"{BOLD}Material changes ({len(material)}){RESET} "
+                  f"{DIM}(authority · data · escalation · signoff){RESET}")
+            for c in material:
+                print(f"  {RED}◆{RESET} {c['path']} [{c['change']}]")
+            print()
+            print(f"{BOLD}Cosmetic changes ({len(cosmetic)}){RESET}")
+            for c in cosmetic:
+                print(f"  {DIM}◇ {c['path']} [{c['change']}]{RESET}")
+        print()
+
+    if material and args.require_reapproval and not result["signoff_changed"]:
+        print(V.fail("Material changes present but the signoff block is unchanged — "
+                     "re-approval required."), file=sys.stderr)
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# aof verify  (optional detached-signature verification)
+# ---------------------------------------------------------------------------
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    contract_path = args.file
+    signature_path = args.signature or gpgverify.default_signature_path(contract_path)
+
+    if not signature_path:
+        print(V.warn(
+            f"No signature file found for {os.path.basename(contract_path)} "
+            "(looked for .asc/.sig/.gpg). Pass --signature to specify one."))
+        print(f"  {DIM}Signature verification is optional. Sign out of band with:")
+        print(f"    gpg --armor --detach-sign {contract_path}{RESET}")
+        return 1
+
+    ok_sig, message = gpgverify.verify_gpg(contract_path, signature_path)
+    if ok_sig:
+        print(V.ok(f"Signature verified for {os.path.basename(contract_path)}"))
+        print(f"  {DIM}{message}{RESET}")
+        return 0
+    print(V.fail(f"Signature NOT verified for {os.path.basename(contract_path)}"))
+    print(f"  {DIM}{message}{RESET}")
+    return 1
+
+
+# ---------------------------------------------------------------------------
+# aof export
 # ---------------------------------------------------------------------------
 
 def cmd_export(args: argparse.Namespace) -> int:
-    """Stub for the Phase 3 exporter.
+    if not args.file:
+        print(f"{RED}ERROR:{RESET} a contract file is required: aof export --format "
+              f"{args.fmt or 'markdown'} <file>", file=sys.stderr)
+        return 1
 
-    Planned: derive deployment-time policy artifacts (e.g., an A2A Agent Card
-    or an OPA/Rego policy skeleton) from a validated contract. These are inputs
-    to a separate runtime policy layer — AOF itself does not enforce at runtime.
-    """
-    print(V.warn("`aof export` is not implemented yet — planned for a future release."))
-    print(f"  {DIM}It will generate deployment-time policy artifacts from a validated")
-    print(f"  contract (e.g., A2A Agent Card, OPA/Rego skeleton). AOF does not")
-    print(f"  enforce policy at runtime; these artifacts feed a separate layer.{RESET}")
-    return 2
+    contract = _load_yaml(args.file)
+    if contract is None:
+        return 1
+
+    try:
+        rendered = exporters.export(contract, args.fmt)
+    except ValueError as e:
+        print(f"{RED}ERROR:{RESET} {e}", file=sys.stderr)
+        return 1
+
+    if args.output_file:
+        with open(args.output_file, "w", encoding="utf-8") as fh:
+            fh.write(rendered)
+        print(V.ok(f"Wrote {args.fmt} export to {args.output_file}"), file=sys.stderr)
+    else:
+        sys.stdout.write(rendered)
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -267,10 +480,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_create.add_argument("name", metavar="NAME.yaml", help="Output filename")
     p_create.set_defaults(func=cmd_create)
 
-    p_export = sub.add_parser("export", help="(stub) Export deployment-time policy artifacts")
-    p_export.add_argument("file", metavar="FILE", nargs="?", help="Validated contract to export")
-    p_export.add_argument("--format", dest="fmt", default=None,
-                          help="Planned target format (e.g., a2a-agent-card, opa)")
+    p_scan = sub.add_parser("scan", help="Fleet inventory of every contract under a directory")
+    p_scan.add_argument("paths", nargs="+", metavar="PATH",
+                        help="Directory/directories (or files/globs) to scan")
+    p_scan.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    p_scan.set_defaults(func=cmd_scan)
+
+    p_diff = sub.add_parser("diff", help="Semantic diff of two contract versions")
+    p_diff.add_argument("old", metavar="OLD", help="Previous contract file")
+    p_diff.add_argument("new", metavar="NEW", help="New contract file")
+    p_diff.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    p_diff.add_argument("--require-reapproval", action="store_true",
+                        help="Exit non-zero when material changes exist but signoff is unchanged")
+    p_diff.set_defaults(func=cmd_diff)
+
+    p_verify = sub.add_parser("verify", help="Verify an optional detached GPG signature")
+    p_verify.add_argument("file", metavar="FILE", help="Contract file to verify")
+    p_verify.add_argument("--signature", metavar="SIG",
+                          help="Detached signature file (default: <file>.asc/.sig/.gpg)")
+    p_verify.set_defaults(func=cmd_verify)
+
+    p_export = sub.add_parser("export", help="Export a policy input / documentation artifact")
+    p_export.add_argument("file", metavar="FILE", help="Validated contract to export")
+    p_export.add_argument("--format", dest="fmt", required=True,
+                          choices=["markdown", "a2a-card", "opa"],
+                          help="markdown | a2a-card (experimental) | opa")
+    p_export.add_argument("-o", "--output", dest="output_file", default=None,
+                          help="Write to a file instead of stdout")
     p_export.set_defaults(func=cmd_export)
 
     return parser
