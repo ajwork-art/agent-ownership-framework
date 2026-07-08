@@ -68,7 +68,7 @@ jobs:
           echo "See docs/SCHEMA.md for field reference."
 ```
 
-See [.github/workflows/validate-contracts.yml](../.github/workflows/validate-contracts.yml) for the full version.
+See [.github/workflows/ci.yml](../.github/workflows/ci.yml) for the full version.
 
 ---
 

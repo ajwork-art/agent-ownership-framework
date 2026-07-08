@@ -9,7 +9,7 @@ Published under the MIT License.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ajwork-art/agent-ownership-framework/releases)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+[![CI](https://github.com/ajwork-art/agent-ownership-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/ajwork-art/agent-ownership-framework/actions/workflows/ci.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **An agent is a product with delegated authority.** Treat it like one.
@@ -143,7 +143,7 @@ git add my-agent-contract.yaml
 git commit -m "feat: add agent ownership contract for payment processing agent"
 ```
 
-Add the [CI/CD workflow](.github/workflows/validate-contracts.yml) to validate all contracts on every pull request.
+Add the [CI/CD workflow](.github/workflows/ci.yml) to validate all contracts on every pull request.
 
 ---
 
