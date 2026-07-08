@@ -83,28 +83,25 @@ single `aof` command with matching verbs (`aof validate`, `aof check`). AOF perf
 **Python (`aof-validate`, installs the `aof` command):**
 
 ```bash
-# From source (works today, from a checkout of this repo):
-pip install ./tools
-
-# Once published to PyPI:
 pip install aof-validate
 ```
 
 **Node.js (`aof-validate`, installs the `aof` command):**
 
 ```bash
-# From source (works today, from a checkout of this repo):
-npm install -g ./tools
-
-# Once published to npm:
 npm install -g aof-validate
+```
+
+**From source, when developing this repository:**
+
+```bash
+pip install ./tools
+npm install -g ./tools
 ```
 
 > **Package names.** The bare `aof` name is already taken by unrelated projects on
 > both PyPI and npm, so the distribution is published as **`aof-validate`**. The
-> installed command is still `aof`. The Python and Node packages are prepared for
-> publication but are not yet on the public registries; until then, install from
-> source as shown above.
+> installed command is still `aof`.
 
 Verify the install:
 
