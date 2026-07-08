@@ -11,9 +11,15 @@ const { execFileSync } = require("child_process");
 const {
   loadSchema,
   validateFile,
+  evaluateFile,
+  resultPassed,
   semanticChecks,
+  lifecycleChecks,
+  schemaVersionOf,
+  schemaVersionNotice,
   expandPaths,
 } = require("../lib/validator");
+const yaml = require("js-yaml");
 
 const TOOLS_DIR = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(TOOLS_DIR, "..");
@@ -102,13 +108,78 @@ test("CLI: aof validate --output json emits parseable JSON", () => {
   assert.equal(payload.passed, 1);
 });
 
-test("CLI: aof export stub exits 2", () => {
-  // execFileSync throws on non-zero exit; capture the status code.
-  let code = 0;
-  try {
-    execFileSync("node", [BIN, "export"], { stdio: "pipe" });
-  } catch (e) {
-    code = e.status;
+test("CLI: Python-only verbs (scan/diff/verify/export) exit 2 with guidance", () => {
+  for (const verb of ["scan", "diff", "verify", "export"]) {
+    let code = 0;
+    try {
+      execFileSync("node", [BIN, verb], { stdio: "pipe" });
+    } catch (e) {
+      code = e.status;
+    }
+    assert.equal(code, 2, `${verb} should exit 2`);
   }
-  assert.equal(code, 2);
+});
+
+// --- Phase 3 parity: schema_version + lifecycle enforcement ---------------
+
+test("schemaVersionOf defaults to 1.0 and notices when absent", () => {
+  assert.equal(schemaVersionOf({}), "1.0");
+  assert.equal(schemaVersionOf({ schema_version: "2.0" }), "2.0");
+  assert.ok(schemaVersionNotice({}));
+  assert.equal(schemaVersionNotice({ schema_version: "2.0" }), null);
+});
+
+test("lifecycleChecks flags a past next_review", () => {
+  const today = new Date(Date.UTC(2026, 6, 8));
+  const warns = lifecycleChecks({ governance: { next_review: "2020-01-01" } }, today);
+  assert.ok(warns.some((w) => w.includes("next_review")));
+  // a retired agent is not flagged for a past sunset date
+  const retired = lifecycleChecks(
+    { lifecycle: { status: "retired", retirement: { sunset_date: "2020-01-01" } } },
+    today
+  );
+  assert.ok(!retired.some((w) => w.includes("sunset_date")));
+});
+
+test("v1 contract validates with a schema_version notice; v2 validates", () => {
+  const schema = loadSchema();
+  const base = yaml.load(fs.readFileSync(EXAMPLE_FILES[0], "utf-8"));
+  const r1 = evaluateFile(EXAMPLE_FILES[0], schema);
+  assert.equal(r1.errors.length, 0);
+  assert.ok(r1.notices.some((n) => n.includes("schema_version")));
+
+  base.schema_version = "2.0";
+  const tmp = path.join(os.tmpdir(), `aof-v2-${Date.now()}.yaml`);
+  fs.writeFileSync(tmp, yaml.dump(base));
+  try {
+    const r2 = evaluateFile(tmp, schema);
+    assert.equal(r2.errors.length, 0, JSON.stringify(r2.errors));
+    assert.equal(r2.notices.length, 0);
+  } finally {
+    fs.unlinkSync(tmp);
+  }
+});
+
+test("--strict promotes lifecycle warnings to failure", () => {
+  const schema = loadSchema();
+  const base = yaml.load(fs.readFileSync(EXAMPLE_FILES[0], "utf-8"));
+  base.governance.next_review = "2020-01-01";
+  const tmp = path.join(os.tmpdir(), `aof-expired-${Date.now()}.yaml`);
+  fs.writeFileSync(tmp, yaml.dump(base));
+  try {
+    const r = evaluateFile(tmp, schema);
+    assert.equal(resultPassed(r, false), true);
+    assert.equal(resultPassed(r, true), false);
+    // CLI: non-strict exits 0, strict exits 1
+    execFileSync("node", [BIN, "validate", tmp], { stdio: "pipe" });
+    let strictCode = 0;
+    try {
+      execFileSync("node", [BIN, "validate", "--strict", tmp], { stdio: "pipe" });
+    } catch (e) {
+      strictCode = e.status;
+    }
+    assert.equal(strictCode, 1);
+  } finally {
+    fs.unlinkSync(tmp);
+  }
 });

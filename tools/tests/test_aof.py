@@ -113,10 +113,6 @@ def test_cli_validate_json_output(capsys):
     assert rc == 0
 
 
-def test_cli_export_stub_returns_2():
-    assert cli_main(["export"]) == 2
-
-
 def test_standalone_shim_runs():
     """The deprecated validate-contract.py must still validate a good contract."""
     script = os.path.join(TOOLS_DIR, "validate-contract.py")
