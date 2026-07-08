@@ -231,8 +231,8 @@ governance:
     - "Report template change affecting Enterprise Risk Committee deliverables"
     - "Scope expansion to new risk domains or regulatory reporting frameworks"
   change_control_board: "Credit Risk Governance Committee"
-  last_reviewed: "2025-11-15"
-  next_review: "2026-02-15"
+  last_reviewed: "2026-06-15"
+  next_review: "2026-09-15"
 
 # =============================================================================
 # BOUNDARY 6: LIFECYCLE

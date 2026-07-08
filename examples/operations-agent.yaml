@@ -231,8 +231,8 @@ governance:
     - "New supplier system connection or API integration"
     - "Model or prompt changes affecting workflow classification"
   change_control_board: "Operations Risk and Technology Committee"
-  last_reviewed: "2025-11-01"
-  next_review: "2026-02-01"
+  last_reviewed: "2026-06-01"
+  next_review: "2026-09-01"
 
 # =============================================================================
 # BOUNDARY 6: LIFECYCLE
