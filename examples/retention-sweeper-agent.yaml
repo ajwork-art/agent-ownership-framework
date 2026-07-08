@@ -1,0 +1,279 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) — v2 example
+# Example: Data Retention Sweeper Agent
+#
+# Domain: Data Governance | Risk Tier: High | Type: autonomous
+# Demonstrates v2 fields:
+#   - schema_version: "2.0" (explicit opt-in; v1 contracts may omit it)
+#   - full lifecycle dates (deployed_at, retirement_date, retirement block with
+#     future sunset_date / planned_review_date) exercised by `aof validate`
+#   - complete four-role sign-off (domain, technical, data, risk)
+#
+# Sign the file out of band and verify with:
+#   gpg --armor --detach-sign retention-sweeper-agent.yaml
+#   aof verify retention-sweeper-agent.yaml
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+schema_version: "2.0"
+
+metadata:
+  name: retention-sweeper-agent
+  version: 1.2.0
+  created: "2026-03-01"
+  updated: "2026-06-20"
+  labels:
+    env: production
+    team: data-governance
+  annotations:
+    runbook-url: "https://wiki.example.com/display/DG/retention-sweeper-runbook"
+
+agent:
+  id: retention-sweeper-agent
+  name: Data Retention Sweeper Agent
+  description: >
+    Enforces data retention schedules across analytics warehouses by identifying
+    and deleting records that have exceeded their approved retention window. Runs
+    on a nightly schedule, deletes only records flagged by policy, and never
+    touches records under legal hold. Produces an immutable deletion manifest.
+  type: autonomous
+  domain: data-governance
+  tags:
+    - retention
+    - deletion
+    - data-lifecycle
+
+purpose:
+  business_purpose: >
+    Automate enforcement of regulatory and policy data-retention schedules so that
+    personal and transactional data is not retained beyond its lawful basis. This
+    reduces compliance exposure under GDPR storage-limitation and internal policy,
+    and removes a manual, error-prone quarterly deletion process.
+  success_metrics:
+    deletion_accuracy: ">= 99.99% of deletions match an approved retention rule"
+    legal_hold_violations: "0 records under legal hold ever deleted"
+    schedule_adherence: ">= 98% of nightly sweeps complete within the window"
+  out_of_scope:
+    - "Deletion of records under active legal hold or litigation preservation"
+    - "Deletion from systems of record (source databases) — analytics copies only"
+    - "Any deletion not backed by an approved, versioned retention rule"
+
+ownership:
+  domain_owner:
+    name: Elena Rodriguez
+    role: "Director, Data Governance"
+    email: elena.rodriguez@example.com
+    accountability:
+      - "Approving retention rules and acceptable deletion scope"
+      - "Business accountability for compliance with retention policy"
+  technical_owner:
+    name: Sam Okafor
+    role: "Staff Engineer, Data Platform"
+    email: sam.okafor@example.com
+    accountability:
+      - "Build quality, testing, and safe-deletion safeguards in production code"
+      - "Runtime behavior, monitoring, and the deletion manifest pipeline"
+  data_owner:
+    name: Priya Nair
+    role: "Data Protection Officer"
+    email: priya.nair@example.com
+    accountability:
+      - "Lawful basis and retention schedule for each data category"
+      - "Legal-hold exclusion list accuracy"
+  risk_owner:
+    name: Thomas Wright
+    role: "Senior Compliance Manager"
+    email: thomas.wright@example.com
+    accountability:
+      - "Regulatory exposure assessment and audit readiness"
+      - "Communicating retention risk posture to legal"
+  escalation_path:
+    - level: 1
+      name: Grace Kim
+      email: grace.kim@example.com
+      role: VP Data & Analytics
+    - level: 2
+      name: Daniel Alvarez
+      email: daniel.alvarez@example.com
+      role: Chief Data Officer
+
+authority:
+  autonomous_decisions:
+    - decision_type: delete_expired_records
+      description: >
+        Delete analytics records whose retention window has expired according to an
+        approved, versioned retention rule, provided the record is not on the legal-hold
+        exclusion list. Every deletion is written to the immutable deletion manifest.
+    - decision_type: skip_uncertain_records
+      description: >
+        Skip and flag any record whose retention status cannot be resolved with high
+        confidence, deferring to human review rather than deleting.
+  escalation_triggers:
+    - "A retention rule change would delete more than 1,000,000 records in one sweep"
+    - "The legal-hold exclusion list cannot be reached or fails validation"
+    - "Any record proposed for deletion matches an active legal hold"
+  prohibited_actions:
+    - "Cannot delete records under legal hold under any circumstances"
+    - "Cannot delete from source systems of record — analytics copies only"
+    - "Cannot delete without a matching approved, versioned retention rule"
+    - "Cannot disable or bypass the deletion manifest audit log"
+  override_mechanism:
+    who_can_pause:
+      - role: "technical_owner or on-call data engineer"
+        method: "Feature flag 'retention-sweeper-enabled' in the deployment config"
+        sla_minutes: 5
+      - role: "Data Protection Officer"
+        method: "Governance console — halts all scheduled sweeps immediately"
+        sla_minutes: 15
+    who_can_override: "Chief Data Officer (escalation level 2)"
+
+data:
+  permitted_sources:
+    - source: "Analytics Warehouse (records + retention metadata)"
+      access_level: write
+      reason: "Primary target for retention enforcement and deletion."
+    - source: "Retention Rule Registry"
+      access_level: read
+      reason: "Source of approved, versioned retention rules."
+    - source: "Legal Hold Exclusion List"
+      access_level: read
+      reason: "Authoritative list of records that must never be deleted."
+  prohibited_sources:
+    - "Source systems of record (production OLTP databases)"
+    - "Backup and disaster-recovery snapshots"
+    - "Any dataset without an assigned retention rule"
+  sensitive_data_handling:
+    must_mask:
+      - customer_identifier
+      - email_address
+    must_encrypt_in_transit: true
+    cannot_retain: true
+    retention_policy: >
+      The agent retains no record content. The deletion manifest stores only record
+      identifiers, rule IDs, and timestamps, retained for 7 years per audit policy.
+
+incident_response:
+  investigator_primary: "technical_owner (Sam Okafor)"
+  investigator_secondary: "Data Platform On-Call Engineer"
+  log_access:
+    - "technical_owner"
+    - "Data Protection Officer (read-only)"
+  investigation_scope:
+    - "Which records were deleted, and did every deletion match an approved rule?"
+    - "Was any record under legal hold affected?"
+    - "Did the deletion manifest capture the full sequence of actions?"
+    - "Were escalation triggers functioning during the incident?"
+  communication:
+    customer_owner: "domain_owner (Elena Rodriguez) — coordinates any customer notification"
+    stakeholder_owner: "domain_owner — briefs VP Data & Analytics and leadership"
+    compliance_owner: "risk_owner (Thomas Wright) — determines regulatory disclosure"
+  post_incident_review:
+    required: true
+    sla_days: 5
+    participants:
+      - domain_owner
+      - technical_owner
+      - data_owner
+
+governance:
+  review_cadence: quarterly
+  approval_required_for:
+    - "Any new or changed retention rule"
+    - "Changes to the legal-hold exclusion mechanism"
+    - "Expanding permitted data sources"
+  change_control_board: "Data Governance Council"
+  last_reviewed: "2026-06-15"
+  next_review: "2026-09-15"
+
+lifecycle:
+  status: active
+  deployed_at: "2026-03-05"
+  versioning:
+    all_changes_require_approval: true
+    material_change_definition:
+      - "Change to any retention rule or deletion scope"
+      - "Change to the legal-hold exclusion source"
+  monitoring:
+    real_time_metrics:
+      - "Records deleted per sweep (alert if > 2x rolling baseline)"
+      - "Legal-hold match count (alert if > 0)"
+      - "Sweep failure rate"
+    review_frequency_days: 7
+  retirement:
+    criteria:
+      - "Retention enforcement is migrated into the warehouse-native policy engine"
+    sunset_date: "2027-12-31"
+    planned_review_date: "2027-06-30"
+
+compliance:
+  frameworks:
+    - GDPR
+    - SOX
+  data_classification: restricted
+  pii_handling: >
+    The agent processes record identifiers that may reference personal data but does
+    not read record content. Identifiers are masked in all logs, and only the deletion
+    manifest (identifiers, rule IDs, timestamps) is retained under audit controls.
+  audit_log_required: true
+  retention_policy: >
+    The deletion manifest is retained for 7 years per SOX audit requirements. No
+    deleted record content is retained by the agent at any point.
+
+risk:
+  risk_tier: high
+  blast_radius: >
+    A malfunction could delete records that should have been retained, or fail to delete
+    records past their lawful retention window. Worst case, an incorrect rule change could
+    delete up to several million analytics records before the escalation trigger fires,
+    causing loss of reporting history and potential regulatory findings. Legal-hold records
+    are protected by a hard prohibition and separate exclusion list.
+  human_in_the_loop_required: true
+  kill_switch_owner: sam.okafor@example.com
+
+signoff:
+  domain_owner:
+    name: Elena Rodriguez
+    date: "2026-06-18"
+    confirmation: >
+      I have reviewed this contract and accept business accountability for the agent's
+      retention-enforcement purpose, deletion scope, and out-of-scope boundaries.
+  technical_owner:
+    name: Sam Okafor
+    date: "2026-06-18"
+    confirmation: >
+      I have reviewed this contract and accept accountability for build quality, the
+      safe-deletion safeguards, the legal-hold prohibition, and the deletion manifest.
+  data_owner:
+    name: Priya Nair
+    date: "2026-06-19"
+    confirmation: >
+      I confirm the retention schedules and legal-hold exclusion list reflect our lawful
+      basis for each data category and accept accountability for their accuracy.
+  risk_owner:
+    name: Thomas Wright
+    date: "2026-06-19"
+    confirmation: >
+      I have assessed the regulatory exposure and audit readiness of this agent and accept
+      accountability for communicating its risk posture to legal and compliance.
+
+dependencies:
+  services:
+    - name: Retention Rule Registry
+      version: "v2.3"
+      type: internal-api
+      description: "Stores approved, versioned retention rules."
+    - name: Legal Hold Service
+      version: "v1.8"
+      type: internal-api
+      description: "Authoritative legal-hold exclusion list."
+  data_sources:
+    - name: Analytics Warehouse
+      type: snowflake
+      description: "Target warehouse for retention enforcement."
+
+sla:
+  availability: 99.5
+  max_latency_ms: 900000
+  error_rate_threshold: "0 legal-hold violations; < 0.01% deletion errors"
+  throughput_limit: "5,000,000 records per nightly sweep"
