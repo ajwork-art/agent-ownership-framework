@@ -1,0 +1,46 @@
+name: "AOF Validate"
+description: "Validate Agent Ownership Framework (AOF) contracts. Deployment-time validation — does not enforce policy at runtime."
+author: "Anitha Jagadeesh"
+
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  contracts:
+    description: "Path, directory, or glob of contract YAML files to validate. Directories are searched recursively for *.yaml / *.yml."
+    required: false
+    default: "contracts"
+  strict:
+    description: "If 'true', fail when no contract files are found under `contracts`."
+    required: false
+    default: "false"
+  python-version:
+    description: "Python version used to run the validator."
+    required: false
+    default: "3.11"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install aof validator
+      shell: bash
+      # Installs the validator bundled with this action (github.action_path is
+      # the checked-out action repository). Once aof-validate is published to
+      # PyPI this can become `pip install aof-validate`.
+      run: python -m pip install "${{ github.action_path }}/tools"
+
+    - name: Validate contracts
+      shell: bash
+      run: |
+        strict_flag=""
+        if [ "${{ inputs.strict }}" = "true" ]; then
+          strict_flag="--strict"
+        fi
+        echo "Running: aof validate $strict_flag ${{ inputs.contracts }}"
+        aof validate $strict_flag "${{ inputs.contracts }}"
