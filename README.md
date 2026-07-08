@@ -95,8 +95,10 @@ npm install -g aof-validate
 **From source, when developing this repository:**
 
 ```bash
-pip install ./tools
-npm install -g ./tools
+| Package | Language | Install | Command |
+|---------|----------|---------|---------|
+| `aof-validate` | Python 3.8+ | `pip install aof-validate` | `aof validate` |
+| `aof-validate` | Node.js 18+ | `npm install -g aof-validate` | `aof validate` |
 ```
 
 > **Package names.** The bare `aof` name is already taken by unrelated projects on
@@ -589,7 +591,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
 If you reference AOF in a paper, blog, or presentation:
 
 ```
-Jagadeesh, Anitha. Agent Ownership Framework (AOF), v1.0.0. 2026.
+Jagadeesh, Anitha. Agent Ownership Framework (AOF), v2.0.0. 2026.
 https://github.com/ajwork-art/agent-ownership-framework
 Enterprise Data AI Realities — Substack.
 ```
