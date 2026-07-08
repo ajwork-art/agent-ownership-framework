@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aof-validate"
+version = "2.0.0"
+description = "Agent Ownership Framework (AOF) — deployment-time validation for machine-readable agent ownership contracts."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Anitha Jagadeesh", email = "anithajagadeesh@gmail.com" }]
+keywords = ["ai-agents", "governance", "ownership", "contracts", "validation", "aof"]
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Office/Business",
+]
+
+[project.urls]
+Homepage = "https://github.com/ajwork-art/agent-ownership-framework"
+Repository = "https://github.com/ajwork-art/agent-ownership-framework"
+Changelog = "https://github.com/ajwork-art/agent-ownership-framework/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+# The installed command is `aof`; the distribution is `aof-validate`
+# (the bare `aof` name is taken by an unrelated project on PyPI).
+[project.scripts]
+aof = "aof.cli:main"
+
+[tool.setuptools]
+packages = ["aof"]
+
+[tool.setuptools.package-data]
+aof = ["schema/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
