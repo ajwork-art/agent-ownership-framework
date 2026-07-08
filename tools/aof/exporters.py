@@ -84,9 +84,13 @@ def to_markdown(contract: Dict[str, Any]) -> str:
     escalation = ownership.get("escalation_path", [])
     if isinstance(escalation, list) and escalation:
         lines.append("## Escalation path")
-        for e in escalation:
+        for i, e in enumerate(escalation, start=1):
             if isinstance(e, dict):
-                lines.append(f"1. {e.get('name', '—')} <{e.get('email', '')}> — {e.get('role', '')}")
+                # Use the contract's own escalation level, falling back to the
+                # 1-based position, so entries render as 1., 2., 3. rather than
+                # a repeated "1.".
+                level = e.get("level", i)
+                lines.append(f"{level}. {e.get('name', '—')} <{e.get('email', '')}> — {e.get('role', '')}")
         lines.append("")
 
     decisions = authority.get("autonomous_decisions", [])
@@ -185,9 +189,11 @@ def to_a2a_card(contract: Dict[str, Any]) -> Dict[str, Any]:
             "generated_by": f"aof {__version__}",
             "a2a_spec": A2A_SPEC_URL,
             "note": (
-                "Experimental mapping of an AOF governance contract onto the A2A "
-                "Agent Card. AOF does not enforce at runtime. Fill in `url`, "
-                "`capabilities`, and `securitySchemes` and review before publishing."
+                "EXPERIMENTAL DRAFT MAPPING — not a publish-ready A2A Agent Card. "
+                "This maps overlapping fields from an AOF governance contract; it is "
+                "not a validated A2A document and AOF does not enforce at runtime. "
+                "Fill in `url`, `capabilities`, and `securitySchemes`, validate against "
+                "the A2A schema, and review before serving at /.well-known/agent-card.json."
             ),
             "source_agent_id": agent.get("id", ""),
         },

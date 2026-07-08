@@ -140,9 +140,11 @@ def test_owners_summary(contract):
 
 
 def test_cli_scan_json(capsys):
-    rc = cli_main(["scan", "--json", os.path.join(REPO_ROOT, "examples")])
+    examples_dir = os.path.join(REPO_ROOT, "examples")
+    expected = len([f for f in os.listdir(examples_dir) if f.endswith((".yaml", ".yml"))])
+    rc = cli_main(["scan", "--json", examples_dir])
     payload = json.loads(capsys.readouterr().out)
-    assert payload["summary"]["total"] == 5
+    assert payload["summary"]["total"] == expected
     assert rc == 0
 
 
@@ -188,6 +190,15 @@ def test_export_markdown(contract):
     assert md.startswith("# Ownership Card")
     assert "does not enforce" in md
     assert "Sarah Chen" in md
+
+
+def test_export_markdown_escalation_uses_numeric_levels(contract):
+    # support-agent escalation_path: level 1 David Park, level 2 Lisa Torres.
+    md = exporters.to_markdown(contract)
+    assert "1. David Park" in md
+    assert "2. Lisa Torres" in md
+    # no repeated "1." for the second entry
+    assert "1. Lisa Torres" not in md
 
 
 def test_export_a2a_card_experimental(contract):
