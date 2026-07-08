@@ -144,6 +144,75 @@ function semanticChecks(contract) {
 }
 
 // ---------------------------------------------------------------------------
+// schema_version (v2, additive) and lifecycle enforcement
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SCHEMA_VERSION = "1.0";
+
+/** @returns {string} declared schema_version or the 1.0 default */
+function schemaVersionOf(contract) {
+  const v = contract && contract.schema_version;
+  return typeof v === "string" && v ? v : DEFAULT_SCHEMA_VERSION;
+}
+
+/** @returns {string|null} informational notice for contracts without schema_version */
+function schemaVersionNotice(contract) {
+  if (!(contract && contract.schema_version)) {
+    return (
+      `schema_version not declared — assuming ${DEFAULT_SCHEMA_VERSION} (v1). ` +
+      "All v2 fields are optional; this contract is valid."
+    );
+  }
+  return null;
+}
+
+/** Parse a YYYY-MM-DD string to a UTC-midnight Date, or null. */
+function parseIsoDate(value) {
+  if (typeof value !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Flag contracts whose lifecycle/governance dates have passed. Returns warning
+ * strings. Warnings never fail validation on their own; `--strict` promotes
+ * them to failures. Only explicit date fields are evaluated.
+ * @returns {string[]}
+ */
+function lifecycleChecks(contract, today) {
+  const now = today || new Date();
+  const todayMid = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const warnings = [];
+  const lifecycle = (contract && contract.lifecycle) || {};
+  const status = lifecycle.status;
+
+  const overdue = (value, label, msg) => {
+    const d = parseIsoDate(value);
+    if (d && d < todayMid) warnings.push(`${label} ${value} ${msg}`);
+  };
+
+  const gov = (contract && contract.governance) || {};
+  overdue(gov.next_review, "governance.next_review",
+    "is in the past — governance review overdue");
+
+  if (status !== "retired") {
+    overdue(lifecycle.retirement_date, "lifecycle.retirement_date",
+      `has passed but status is '${status}' — agent should be retired`);
+  }
+  const retirement = lifecycle.retirement || {};
+  if (status !== "retired") {
+    overdue(retirement.sunset_date, "lifecycle.retirement.sunset_date",
+      `has passed but status is '${status}' — agent should be retired`);
+  }
+  overdue(retirement.planned_review_date, "lifecycle.retirement.planned_review_date",
+    "has passed — retirement decision review overdue");
+
+  return warnings;
+}
+
+// ---------------------------------------------------------------------------
 // Core validation
 // ---------------------------------------------------------------------------
 
@@ -160,43 +229,64 @@ function makeAjv() {
 }
 
 /**
- * Validate a single YAML contract file.
- * @param {string} filepath
- * @param {object} schema
- * @returns {{ passed: boolean, errors: string[] }}
+ * Validate a contract file and gather errors, warnings, notices, and the parsed
+ * contract in one pass.
+ * @returns {{ file: string, errors: string[], warnings: string[], notices: string[], contract: object|null }}
  */
-function validateFile(filepath, schema) {
-  const errors = [];
+function evaluateFile(filepath, schema, today) {
+  const result = { file: filepath, errors: [], warnings: [], notices: [], contract: null };
 
   if (!fs.existsSync(filepath)) {
-    return { passed: false, errors: [`File not found: ${filepath}`] };
+    result.errors.push(`File not found: ${filepath}`);
+    return result;
   }
 
   let contract;
   try {
     contract = yaml.load(fs.readFileSync(filepath, "utf-8"));
   } catch (e) {
-    return { passed: false, errors: [`YAML parse error: ${e.message}`] };
+    result.errors.push(`YAML parse error: ${e.message}`);
+    return result;
   }
 
   if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
-    return {
-      passed: false,
-      errors: ["File does not contain a YAML mapping (expected top-level object)"],
-    };
+    result.errors.push("File does not contain a YAML mapping (expected top-level object)");
+    return result;
   }
+
+  result.contract = contract;
 
   const validate = makeAjv().compile(schema);
   if (!validate(contract) && validate.errors) {
     for (const err of validate.errors) {
       const fieldPath = err.instancePath || "(root)";
-      errors.push(`Schema: [${fieldPath}] ${err.message}`);
+      result.errors.push(`Schema: [${fieldPath}] ${err.message}`);
     }
   }
 
-  for (const e of semanticChecks(contract)) errors.push(`Semantic: ${e}`);
+  for (const e of semanticChecks(contract)) result.errors.push(`Semantic: ${e}`);
+  for (const w of lifecycleChecks(contract, today)) result.warnings.push(w);
+  const notice = schemaVersionNotice(contract);
+  if (notice) result.notices.push(notice);
 
-  return { passed: errors.length === 0, errors };
+  return result;
+}
+
+/** A result passes if it has no errors (and, under strict, no warnings). */
+function resultPassed(result, strict) {
+  if (result.errors.length) return false;
+  if (strict && result.warnings.length) return false;
+  return true;
+}
+
+/**
+ * Validate a single YAML contract file (errors only; warnings never fail here).
+ * Kept stable for callers that predate v2.
+ * @returns {{ passed: boolean, errors: string[] }}
+ */
+function validateFile(filepath, schema) {
+  const r = evaluateFile(filepath, schema);
+  return { passed: r.errors.length === 0, errors: r.errors };
 }
 
 // ---------------------------------------------------------------------------
@@ -240,7 +330,13 @@ module.exports = {
   loadSchema,
   checkEmail,
   semanticChecks,
+  lifecycleChecks,
+  schemaVersionOf,
+  schemaVersionNotice,
+  evaluateFile,
+  resultPassed,
   validateFile,
   expandPaths,
+  parseIsoDate,
   EMAIL_RE,
 };

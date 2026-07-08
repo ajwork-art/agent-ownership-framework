@@ -27,7 +27,13 @@ try {
   chalk = { green: (s) => s, red: (s) => s, yellow: (s) => s, bold: (s) => s };
 }
 
-const { loadSchema, validateFile, expandPaths } = require("../lib/validator");
+const {
+  loadSchema,
+  evaluateFile,
+  resultPassed,
+  schemaVersionOf,
+  expandPaths,
+} = require("../lib/validator");
 const pkg = require("../package.json");
 
 const ok = (m) => `${chalk.green("✓")} ${m}`;
@@ -40,17 +46,18 @@ aof ${pkg.version} — Agent Ownership Framework CLI (deployment-time validation
 
 Usage:
   aof validate <path...> [--strict] [--output text|json]
-  aof check <file>       (stub — full boundary report is in the Python CLI)
-  aof create <name>      (stub — use the Python CLI)
-  aof export <file>      (stub — planned for a future release)
   aof --version
 
 validate:
   <path> may be a file or a directory (searched recursively for *.yaml/*.yml).
-  --strict   Fail (non-zero) if no contracts are found.
+  --strict   Fail (non-zero) if no contracts are found OR any contract has
+             lifecycle warnings (e.g. a governance review date in the past).
   --output   text (default) or json.
 
-Exit codes: 0 = valid, 1 = failed / not found (strict), 2 = not implemented.
+The Python CLI (pip install aof-validate) additionally provides:
+  aof scan · aof diff · aof verify · aof check · aof create · aof export
+
+Exit codes: 0 = valid, 1 = failed / not found (strict), 2 = Python-CLI command.
 `);
 }
 
@@ -90,55 +97,59 @@ function cmdValidate(args) {
   const results = [];
   let anyFailed = false;
   for (const filepath of files) {
-    const { passed, errors } = validateFile(filepath, schema);
+    const r = evaluateFile(filepath, schema);
+    const passed = resultPassed(r, strict);
     if (!passed) anyFailed = true;
-    results.push({ file: filepath, passed, errors });
+    results.push({
+      file: filepath,
+      passed,
+      schema_version: r.contract ? schemaVersionOf(r.contract) : null,
+      errors: r.errors,
+      warnings: r.warnings,
+      notices: r.notices,
+    });
     if (output === "text") {
       const name = path.basename(filepath);
-      if (passed) {
-        console.log(ok(chalk.bold(name)));
-      } else {
-        console.log(fail(chalk.bold(name)));
-        for (const err of errors) console.log(`    ${chalk.red("→")} ${err}`);
-      }
+      console.log(passed ? ok(chalk.bold(name)) : fail(chalk.bold(name)));
+      for (const err of r.errors) console.log(`    ${chalk.red("→")} ${err}`);
+      const tag = strict ? "" : chalk.yellow(" (fails under --strict)");
+      for (const w of r.warnings) console.log(`    ${chalk.yellow("!")} ${w}${tag}`);
+      for (const n of r.notices) console.log(`    ${chalk.yellow("·")} ${n}`);
     }
   }
 
   const total = results.length;
   const failed = results.filter((r) => !r.passed).length;
+  const warned = results.filter((r) => r.warnings.length).length;
   if (output === "json") {
     console.log(
       JSON.stringify(
-        {
-          aof_validator: pkg.version,
-          total,
-          passed: total - failed,
-          failed,
-          results,
-        },
+        { aof: pkg.version, strict, total, passed: total - failed, failed, with_warnings: warned, results },
         null,
         2
       )
     );
   } else {
     console.log();
-    console.log(failed === 0 ? ok(`All ${total} contract(s) valid`) : fail(`${failed}/${total} contract(s) failed validation`));
+    if (failed === 0) {
+      const suffix = warned && !strict ? ` (${warned} with warnings)` : "";
+      console.log(ok(`All ${total} contract(s) valid${suffix}`));
+    } else {
+      console.log(fail(`${failed}/${total} contract(s) failed validation`));
+    }
   }
 
   return anyFailed ? 1 : 0;
 }
 
 function cmdStub(verb) {
-  if (verb === "export") {
-    console.log(warn("`aof export` is not implemented yet — planned for a future release."));
-  } else {
-    console.log(
-      warn(
-        `\`aof ${verb}\` is not implemented in the Node CLI. ` +
-          `Use the Python CLI (pip install aof-validate) for \`aof ${verb}\`.`
-      )
-    );
-  }
+  console.log(
+    warn(
+      `\`aof ${verb}\` is available in the Python CLI. ` +
+        `Install it with \`pip install aof-validate\` and run \`aof ${verb}\`. ` +
+        "The Node CLI implements \`aof validate\` (including lifecycle checks and --strict)."
+    )
+  );
   return 2;
 }
 
@@ -162,6 +173,9 @@ function main() {
       break;
     case "check":
     case "create":
+    case "scan":
+    case "diff":
+    case "verify":
     case "export":
       code = cmdStub(verb);
       break;
