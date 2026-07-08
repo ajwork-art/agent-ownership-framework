@@ -28,7 +28,7 @@ const path = require("path");
 // Dependency checks
 // ---------------------------------------------------------------------------
 
-let yaml, Ajv, chalk;
+let yaml, Ajv, addFormats, chalk;
 
 try {
   yaml = require("js-yaml");
@@ -46,7 +46,19 @@ try {
 }
 
 try {
-  chalk = require("chalk");
+  const AjvFormatsModule = require("ajv-formats");
+  addFormats = AjvFormatsModule.default || AjvFormatsModule;
+} catch {
+  console.error("ERROR: ajv-formats is required. Run: npm install in the tools/ directory.");
+  process.exit(1);
+}
+
+try {
+  // chalk v5 is ESM-only; this project pins chalk v4 (CommonJS). The `.default`
+  // fallback keeps the require resilient if a v5 namespace object is returned.
+  const chalkModule = require("chalk");
+  chalk = chalkModule.default || chalkModule;
+  if (typeof chalk.green !== "function") throw new Error("chalk unavailable");
 } catch {
   // Graceful fallback: no colors
   chalk = {
@@ -342,8 +354,11 @@ function main() {
     process.exit(1);
   }
 
-  // Configure AJV (draft-07, collect all errors)
+  // Configure AJV (draft-07, collect all errors). ajv-formats registers the
+  // "date" and "email" format validators the schema relies on; without it AJV
+  // silently ignores those formats.
   const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
 
   const results = [];
   let anyFailed = false;
