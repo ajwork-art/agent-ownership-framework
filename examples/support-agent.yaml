@@ -17,7 +17,7 @@
 #   8. Failure Acct  — domain_owner communicates to customers, risk_owner to regulators
 # =============================================================================
 
-apiVersion: aof/v1
+apiVersion: broken/v1
 kind: AgentOwnershipContract
 
 metadata:
