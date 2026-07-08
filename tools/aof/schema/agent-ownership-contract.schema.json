@@ -34,6 +34,11 @@
       "description": "The resource kind. Must be AgentOwnershipContract.",
       "enum": ["AgentOwnershipContract"]
     },
+    "schema_version": {
+      "type": "string",
+      "description": "Optional, additive AOF schema generation this contract targets (e.g., '1.0', '2.0'). Absent means 1.0 — a valid v1 contract. Independent of apiVersion; introduced in AOF v2 so tooling can distinguish v1 and v2 contracts. All v2 fields are optional, so omitting this field never causes a validation error.",
+      "pattern": "^\\d+\\.\\d+$"
+    },
     "metadata": {
       "type": "object",
       "description": "Contract document metadata. Identifies and versions the contract itself.",
