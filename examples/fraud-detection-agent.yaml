@@ -236,8 +236,8 @@ governance:
     - "New data source or feature signal added to the scoring pipeline"
     - "Scope expansion beyond card transaction scoring (e.g., ACH, wire, new payment types)"
   change_control_board: "Financial Crime Risk Committee"
-  last_reviewed: "2026-01-10"
-  next_review: "2026-02-10"
+  last_reviewed: "2026-07-01"
+  next_review: "2026-08-01"
 
 # =============================================================================
 # BOUNDARY 6: LIFECYCLE

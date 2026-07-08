@@ -1,0 +1,103 @@
+name: CI
+
+# Runs the AOF validator test suites (Python pytest and Node node:test), the
+# packaged `aof` CLI against every example contract and the annotated schema
+# example, and the composite GitHub Action end-to-end. This is the repository's
+# own continuous-integration workflow — the badge in the README reflects it.
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python package (pytest + aof CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: "tools/pyproject.toml"
+
+      - name: Install aof package (with dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "./tools[dev]"
+
+      - name: Run pytest
+        run: pytest tools/tests -q
+
+      - name: Validate every example contract (aof validate)
+        run: aof validate examples
+
+      - name: Validate annotated schema example
+        run: aof validate schema/v1/agent-ownership-contract.example.yaml
+
+      - name: Check governance boundaries (aof check) for every example
+        run: |
+          for f in examples/*.yaml; do
+            echo "::group::aof check $f"
+            aof check "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Deprecated standalone script still works
+        run: python tools/validate-contract.py examples/support-agent.yaml
+
+  node:
+    name: Node package (node:test + aof CLI)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Run node:test suite
+        run: npm test
+
+      - name: Validate every example contract (aof validate)
+        run: node bin/aof.js validate ../examples
+
+      - name: Validate annotated schema example
+        run: node bin/aof.js validate ../schema/v1/agent-ownership-contract.example.yaml
+
+  action:
+    name: Composite action (end-to-end)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Non-strict: examples carry real governance review dates that drift into
+      # the past over time; strict lifecycle blocking is covered by the unit
+      # tests against synthetic fixtures. This job proves the action installs
+      # and runs end-to-end.
+      - name: Run AOF Validate action against examples
+        uses: ./
+        with:
+          contracts: examples
+          strict: "false"

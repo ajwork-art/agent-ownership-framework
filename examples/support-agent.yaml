@@ -251,8 +251,8 @@ governance:
     - "Model version updates or prompt changes"
     - "Access to new customer data fields"
   change_control_board: "Customer Experience Governance Committee"
-  last_reviewed: "2026-01-15"
-  next_review: "2026-04-15"
+  last_reviewed: "2026-06-15"
+  next_review: "2026-09-15"
 
 # =============================================================================
 # BOUNDARY 6: LIFECYCLE

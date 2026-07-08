@@ -68,7 +68,7 @@ jobs:
           echo "See docs/SCHEMA.md for field reference."
 ```
 
-See [.github/workflows/validate-contracts.yml](../.github/workflows/validate-contracts.yml) for the full version.
+See [.github/workflows/ci.yml](../.github/workflows/ci.yml) for the full version.
 
 ---
 
@@ -239,3 +239,56 @@ Make it executable:
 ```bash
 chmod +x .git/hooks/pre-commit
 ```
+
+---
+
+## Optional: signature verification (`aof verify`)
+
+Signing an AOF contract is **entirely optional**. AOF does not ship a PKI, does not
+generate or store private keys, and does not require signatures to validate a
+contract. `aof verify` is a defense-in-depth option for teams that want cryptographic
+proof that a specific key holder approved a contract file. Signing happens **out of
+band**; AOF only verifies.
+
+### GPG (implemented)
+
+```bash
+# One-time: the signer creates/holds their own key (AOF never touches private keys)
+gpg --full-generate-key
+
+# Sign a contract, producing a detached signature next to it
+gpg --armor --detach-sign my-agent.yaml        # -> my-agent.yaml.asc
+
+# A verifier imports the signer's PUBLIC key, then verifies
+gpg --import signer-public-key.asc
+aof verify my-agent.yaml                        # finds my-agent.yaml.asc automatically
+aof verify my-agent.yaml --signature path/to/detached.sig
+```
+
+`aof verify` exits `0` on a good signature and non-zero otherwise. Key distribution
+and trust are the operator's responsibility.
+
+### Sigstore / cosign (recipe — keyless, experimental)
+
+[Sigstore](https://www.sigstore.dev/) `cosign` can sign a contract as a blob using
+short-lived, identity-bound certificates (no long-lived private key to store). AOF
+does not wrap cosign; use it directly and gate on its exit code:
+
+```bash
+# Sign (keyless — opens an OIDC identity flow; records to the transparency log)
+COSIGN_EXPERIMENTAL=1 cosign sign-blob \
+  --output-signature my-agent.yaml.sig \
+  --output-certificate my-agent.yaml.pem \
+  my-agent.yaml
+
+# Verify — pin the expected signer identity and issuer
+COSIGN_EXPERIMENTAL=1 cosign verify-blob \
+  --certificate my-agent.yaml.pem \
+  --signature my-agent.yaml.sig \
+  --certificate-identity 'owner@your-org.com' \
+  --certificate-oidc-issuer 'https://accounts.google.com' \
+  my-agent.yaml
+```
+
+This recipe is documented but not yet wrapped by the `aof` CLI. As with GPG, it is
+optional and orthogonal to schema validation.

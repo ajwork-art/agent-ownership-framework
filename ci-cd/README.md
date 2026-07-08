@@ -54,7 +54,7 @@ jobs:
       - run: python tools/validate-contract.py examples/*.yaml
 ```
 
-See [.github/workflows/validate-contracts.yml](../.github/workflows/validate-contracts.yml) for the full workflow used in this repository.
+See [.github/workflows/ci.yml](../.github/workflows/ci.yml) for the full workflow used in this repository.
 
 ---
 

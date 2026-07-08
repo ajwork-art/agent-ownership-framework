@@ -443,10 +443,10 @@ governance:
   change_control_board: "Payments Risk and Compliance Committee"
 
   # ISO 8601 date of the most recent formal review.
-  last_reviewed: "2026-01-10"
+  last_reviewed: "2026-06-10"
 
   # ISO 8601 date of the next scheduled review.
-  next_review: "2026-04-10"
+  next_review: "2026-09-10"
 
   # Optional annotations specific to governance (oncall, runbook, etc.)
   annotations:

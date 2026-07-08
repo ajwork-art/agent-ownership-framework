@@ -1,15 +1,36 @@
 {
-  "name": "aof-validator",
-  "version": "1.0.0",
-  "description": "Agent Ownership Framework contract validator",
-  "main": "validate-contract.js",
+  "name": "aof-validate",
+  "version": "2.0.0",
+  "description": "Agent Ownership Framework (AOF) — deployment-time validation for machine-readable agent ownership contracts.",
+  "keywords": ["ai-agents", "governance", "ownership", "contracts", "validation", "aof"],
+  "license": "MIT",
+  "author": "Anitha Jagadeesh",
+  "homepage": "https://github.com/ajwork-art/agent-ownership-framework",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajwork-art/agent-ownership-framework.git"
+  },
+  "bin": {
+    "aof": "bin/aof.js"
+  },
+  "main": "lib/validator.js",
+  "files": [
+    "bin/",
+    "lib/",
+    "aof/schema/agent-ownership-contract.schema.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "validate": "node validate-contract.js",
-    "test": "node validate-contract.js ../examples/*.yaml"
+    "test": "node --test test/*.test.js",
+    "validate": "node bin/aof.js validate",
+    "validate:examples": "node bin/aof.js validate ../examples"
   },
   "dependencies": {
     "ajv": "^8.17.1",
+    "ajv-formats": "^2.1.1",
     "js-yaml": "^4.1.0",
-    "chalk": "^5.3.0"
+    "chalk": "^4.1.2"
   }
 }

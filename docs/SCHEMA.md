@@ -10,6 +10,7 @@ Complete field-by-field reference for AOF v1 (`apiVersion: aof/v1`). Every field
 |-------|------|----------|-------------|
 | `apiVersion` | string | Yes | Must be `aof/v1` |
 | `kind` | string | Yes | Must be `AgentOwnershipContract` |
+| `schema_version` | string | No | AOF schema generation the contract targets (e.g. `1.0`, `2.0`). **Optional and additive (v2).** Absent means `1.0` — a valid v1 contract. Pattern `^\d+\.\d+$`. |
 | `metadata` | object | Yes | Contract document metadata |
 | `agent` | object | Yes | Agent identity and classification |
 | `ownership` | object | Yes | Owner assignment and escalation |
@@ -21,6 +22,13 @@ Complete field-by-field reference for AOF v1 (`apiVersion: aof/v1`). Every field
 | `risk` | object | Yes | Risk tier, blast radius, kill switch |
 | `dependencies` | object | Yes | Models, services, data sources |
 | `sla` | object | Yes | Service level agreement |
+
+### Backward compatibility (v1 → v2)
+
+All AOF v2 additions are **additive and optional**. A valid v1 contract still
+validates unchanged; the validator emits an informational notice that
+`schema_version` defaults to `1.0` (never an error). Declare `schema_version: "2.0"`
+to opt in explicitly. v2 does not add any required fields.
 
 ---
 

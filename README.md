@@ -8,8 +8,10 @@ Published under the MIT License.
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ajwork-art/agent-ownership-framework/releases)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/ajwork-art/agent-ownership-framework/releases)
+[![CI](https://github.com/ajwork-art/agent-ownership-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/ajwork-art/agent-ownership-framework/actions/workflows/ci.yml)
+[![Schema: v1 + v2 compatible](https://img.shields.io/badge/schema-v1%20%2B%20v2%20compatible-blue.svg)](docs/SCHEMA.md)
+[![Migration guide](https://img.shields.io/badge/docs-MIGRATION-blue.svg)](MIGRATION.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **An agent is a product with delegated authority.** Treat it like one.
@@ -72,6 +74,50 @@ If you cannot answer all eight, you are not ready to deploy.
 
 ---
 
+## Installation
+
+The validator ships as an installable package in two ecosystems. Both install a
+single `aof` command with matching verbs (`aof validate`, `aof check`). AOF performs
+**deployment-time** contract validation — it does not enforce policy at runtime.
+
+**Python (`aof-validate`, installs the `aof` command):**
+
+```bash
+# From source (works today, from a checkout of this repo):
+pip install ./tools
+
+# Once published to PyPI:
+pip install aof-validate
+```
+
+**Node.js (`aof-validate`, installs the `aof` command):**
+
+```bash
+# From source (works today, from a checkout of this repo):
+npm install -g ./tools
+
+# Once published to npm:
+npm install -g aof-validate
+```
+
+> **Package names.** The bare `aof` name is already taken by unrelated projects on
+> both PyPI and npm, so the distribution is published as **`aof-validate`**. The
+> installed command is still `aof`. The Python and Node packages are prepared for
+> publication but are not yet on the public registries; until then, install from
+> source as shown above.
+
+Verify the install:
+
+```bash
+aof --version
+aof validate examples          # validate every contract in a directory
+```
+
+The standalone scripts (`tools/validate-contract.py`, `tools/validate-contract.js`)
+still work but are **deprecated** in favor of the `aof` command.
+
+---
+
 ## Quick Start
 
 **Step 1: Copy the template**
@@ -126,14 +172,11 @@ See [examples/fraud-detection-agent.yaml](examples/fraud-detection-agent.yaml) f
 
 **Step 4: Validate your contract**
 
-```bash
-# Python
-cd tools && pip install -r requirements.txt
-python validate-contract.py ../my-agent-contract.yaml
+Install the `aof` command (see [Installation](#installation)), then:
 
-# Node.js
-cd tools && npm install
-node validate-contract.js ../my-agent-contract.yaml
+```bash
+aof validate my-agent-contract.yaml     # a file, a directory, or a glob
+aof check my-agent-contract.yaml        # eight-boundary governance checklist
 ```
 
 **Step 5: Commit and enforce**
@@ -143,7 +186,146 @@ git add my-agent-contract.yaml
 git commit -m "feat: add agent ownership contract for payment processing agent"
 ```
 
-Add the [CI/CD workflow](.github/workflows/validate-contracts.yml) to validate all contracts on every pull request.
+Add the [CI/CD workflow](.github/workflows/ci.yml) to validate all contracts on every pull request.
+
+---
+
+## GitHub Action
+
+This repository ships a composite GitHub Action ([`action.yml`](action.yml)) that
+runs `aof validate` against a configurable contracts directory. It performs
+**deployment-time** validation only; it does not enforce policy at runtime.
+
+**Usage in a consumer repository:**
+
+```yaml
+# .github/workflows/aof.yml
+name: Validate AOF contracts
+on: [push, pull_request]
+
+jobs:
+  aof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ajwork-art/agent-ownership-framework@v1
+        with:
+          contracts: contracts   # file, directory, or glob (default: contracts)
+          strict: "true"         # fail if no contracts are found (default: false)
+```
+
+**Inputs:**
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `contracts` | no | `contracts` | Path, directory, or glob of contract YAML files. Directories are searched recursively for `*.yaml` / `*.yml`. |
+| `strict` | no | `false` | If `true`, fail when no contract files are found under `contracts`. |
+| `python-version` | no | `3.11` | Python version used to run the validator. |
+
+### Publishing to the GitHub Marketplace
+
+The action is prepared for a Marketplace listing but is **not yet published**. To
+list it:
+
+1. Ensure `action.yml` is at the repository root (it is), with `name`, `description`,
+   and a `branding` block (icon `check-circle`, color `blue`).
+2. Create a release whose tag is a semantic version (for example `v1`), and check
+   **"Publish this Action to the GitHub Marketplace"** in the release UI.
+3. Choose categories such as *Code quality* and *Continuous integration*.
+
+Suggested Marketplace copy:
+
+> **AOF Validate** — Validate machine-readable AI agent ownership contracts on every
+> push and pull request. Deployment-time governance validation for who owns an agent,
+> what it is authorized to do, and how it is governed. Does not enforce policy at runtime.
+
+---
+
+## v1 → v2: what changed
+
+v2 is **fully backward compatible** — every valid v1 contract still validates, and
+no new fields are required. See [MIGRATION.md](MIGRATION.md) for the full guide.
+
+- **Tooling is packaged.** The validator ships as the installable `aof` command
+  (Python `aof-validate`, Node `aof-validate`); the standalone scripts are deprecated.
+- **New optional field:** `schema_version` (absent ⇒ `1.0`, with an informational
+  notice — never an error).
+- **New commands:** `aof scan`, `aof diff`, `aof verify`, `aof export`, plus
+  lifecycle enforcement and `--strict` in `aof validate`.
+- **Same scope.** AOF still validates at deployment time and generates policy
+  *inputs*; it does not enforce policy at runtime.
+
+## CLI reference
+
+All commands are deployment-time tooling. `aof validate` is available in both the
+Python and Node packages; the rest are provided by the Python package.
+
+| Command | What it does |
+|---------|--------------|
+| `aof validate <path> [--strict] [--output json]` | Validate a file/dir/glob against the schema + semantic + lifecycle checks. `--strict` fails on lifecycle warnings or no files found. |
+| `aof check <file>` | Human-readable eight-boundary governance checklist. |
+| `aof create <name.yaml>` | Scaffold a new contract from the template. |
+| `aof scan <dir> [--json]` | Fleet inventory: per-contract status, owners, coverage stats. |
+| `aof diff <old> <new> [--require-reapproval]` | Semantic diff; classify material vs cosmetic changes. |
+| `aof verify <file> [--signature SIG]` | Optional detached GPG signature verification. |
+| `aof export --format markdown\|a2a-card\|opa <file> [-o OUT]` | Generate an ownership card, an experimental A2A card, or a Rego policy stub. |
+
+## v2 capabilities
+
+AOF v2 adds fleet-scale governance commands to the `aof` CLI. Everything below is
+**deployment-time** tooling: it validates contracts and generates policy *inputs*.
+It does not enforce policy at runtime. v2 is fully backward compatible — a valid v1
+contract still validates and receives an informational notice that `schema_version`
+defaults to `1.0`.
+
+**Lifecycle enforcement** — `aof validate` flags contracts whose governance/lifecycle
+dates have passed (`governance.next_review`, `lifecycle.retirement_date`,
+`lifecycle.retirement.sunset_date`, `lifecycle.retirement.planned_review_date`). These
+are warnings by default; `--strict` promotes them to CI-blocking failures.
+
+```bash
+aof validate contracts               # warns on stale contracts, exits 0
+aof validate --strict contracts      # stale contract → non-zero (CI gate)
+```
+
+**`aof scan`** — fleet inventory. Answers "which agents have no owner or a stale
+contract?" across a directory.
+
+```bash
+aof scan contracts                   # human-readable table + summary
+aof scan --json contracts            # per-contract status + coverage stats
+```
+
+**`aof diff <old> <new>`** — semantic diff. Classifies changes as **material**
+(anything under `authority`, `data`, `ownership.escalation_path`, or `signoff`) vs.
+cosmetic. `--require-reapproval` exits non-zero when material changes are present but
+the `signoff` block is unchanged.
+
+```bash
+aof diff v1.yaml v2.yaml --require-reapproval
+```
+
+**`aof verify`** — optional detached-signature verification (GPG). Signing is never
+required and AOF ships no PKI or private keys; this is a defense-in-depth option. See
+[docs/INTEGRATION.md](docs/INTEGRATION.md) for the GPG and Sigstore/cosign recipes.
+
+```bash
+gpg --armor --detach-sign my-agent.yaml   # sign out of band → my-agent.yaml.asc
+aof verify my-agent.yaml                   # verifies against my-agent.yaml.asc
+```
+
+**`aof export --format <fmt>`** — generate artifacts from a validated contract:
+
+| Format | Output | Notes |
+|--------|--------|-------|
+| `markdown` | One-page ownership card for wikis/runbooks | — |
+| `a2a-card` | A2A Agent Card JSON (overlapping fields) | **Experimental** — mapped against the [A2A spec](https://a2a-protocol.org/latest/specification/); review before publishing |
+| `opa` | Rego policy stub from authority/data sections | Contains `TODO` markers; **AOF generates policy inputs, it does not enforce** |
+
+```bash
+aof export --format markdown my-agent.yaml -o ownership-card.md
+aof export --format opa my-agent.yaml -o policy.rego
+```
 
 ---
 
@@ -281,6 +463,8 @@ agent-ownership-framework/
 ├── README.md                          # This file
 ├── LICENSE                            # MIT License
 ├── CONTRIBUTING.md                    # Contribution guidelines
+├── CHANGELOG.md                       # Keep a Changelog history
+├── action.yml                         # Composite GitHub Action (aof validate)
 │
 ├── schema/
 │   ├── README.md                      # Schema documentation
@@ -298,10 +482,15 @@ agent-ownership-framework/
 │
 ├── tools/
 │   ├── README.md                      # Tool documentation
-│   ├── validate-contract.py           # Python validator
-│   ├── validate-contract.js           # Node.js validator
-│   ├── requirements.txt               # Python dependencies
-│   └── package.json                   # Node.js dependencies
+│   ├── pyproject.toml                 # Python package (aof-validate → `aof`)
+│   ├── aof/                           # Python package sources + bundled schema
+│   ├── tests/                         # Python (pytest) tests
+│   ├── package.json                   # Node package (aof-validate → `aof`)
+│   ├── bin/aof.js                     # Node `aof` CLI entry point
+│   ├── lib/validator.js               # Node validator core
+│   ├── test/                          # Node (node:test) tests
+│   ├── validate-contract.py           # Deprecated standalone Python script
+│   └── validate-contract.js           # Deprecated standalone Node script
 │
 ├── docs/
 │   ├── FRAMEWORK.md                   # Framework concepts and walkthrough
@@ -331,6 +520,8 @@ agent-ownership-framework/
 
 | Document | Description |
 |----------|-------------|
+| [MIGRATION.md](MIGRATION.md) | v1 → v2 migration: v1 stays valid, opting into v2 fields, adopting signing |
+| [ROADMAP.md](ROADMAP.md) | Planned direction and future work |
 | [docs/FRAMEWORK.md](docs/FRAMEWORK.md) | Framework concepts, the delegation problem, ownership failure patterns, agent lifecycle |
 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md) | The four core AOF principles with schema field mappings |
 | [docs/SCHEMA.md](docs/SCHEMA.md) | Complete field-by-field reference for every schema section |
@@ -346,7 +537,9 @@ agent-ownership-framework/
 
 ## Examples
 
-Five production-realistic examples covering the most common enterprise agent patterns:
+Production-realistic examples covering common enterprise agent patterns. The last two
+exercise v2 fields (`schema_version`, lifecycle dates, four-role sign-off, and an
+orchestrator modeled via dependencies).
 
 | Example | Domain | Risk Tier | Type | Key Compliance |
 |---------|--------|-----------|------|----------------|
@@ -355,17 +548,19 @@ Five production-realistic examples covering the most common enterprise agent pat
 | [fraud-detection-agent.yaml](examples/fraud-detection-agent.yaml) | Financial Services | Critical | Autonomous | PCI-DSS, BSA-AML, SOX, GLBA |
 | [risk-analysis-agent.yaml](examples/risk-analysis-agent.yaml) | Risk Management | High | Advisory | GDPR, SOX, FCRA, GLBA |
 | [internal-tool-agent.yaml](examples/internal-tool-agent.yaml) | Internal Tooling | Low | Autonomous | Internal policy only |
+| [retention-sweeper-agent.yaml](examples/retention-sweeper-agent.yaml) **(v2)** | Data Governance | High | Autonomous | GDPR, SOX |
+| [orchestrator-agent.yaml](examples/orchestrator-agent.yaml) **(v2)** | Insurance Operations | High | Hybrid | SOX, NAIC |
 
 ---
 
 ## Validation Tools
 
-| Tool | Language | Install |
-|------|----------|---------|
-| [validate-contract.py](tools/validate-contract.py) | Python 3.8+ | `pip install -r tools/requirements.txt` |
-| [validate-contract.js](tools/validate-contract.js) | Node.js 18+ | `npm install` in `tools/` |
+| Package | Language | Install | Command |
+|---------|----------|---------|---------|
+| [`aof-validate`](tools/pyproject.toml) | Python 3.8+ | `pip install ./tools` | `aof validate` |
+| [`aof-validate`](tools/package.json) | Node.js 18+ | `npm install -g ./tools` | `aof validate` |
 
-Both tools validate against the JSON Schema, check email formats, verify SLA ranges, and confirm escalation path sequencing.
+Both packages validate against the JSON Schema, check email and date formats, verify SLA ranges, and confirm escalation path sequencing. See [Installation](#installation) for details. The `aof validate` verb accepts a file, a directory (searched recursively), or a glob, and supports `--strict` and `--output json`.
 
 ---
 

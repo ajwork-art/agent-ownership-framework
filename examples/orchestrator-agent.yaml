@@ -1,0 +1,244 @@
+# =============================================================================
+# Agent Ownership Framework (AOF) — v2 example
+# Example: Claims Intake Orchestrator Agent
+#
+# Domain: Insurance Operations | Risk Tier: high | Type: hybrid
+#
+# Multi-agent modeling note:
+#   The AOF v2 schema describes ONE agent per contract. It has no first-class
+#   field for sub-agents or an orchestration graph. This orchestrator is therefore
+#   modeled as a single agent whose delegated authority is to route work to other
+#   agents; the coordinated agents are declared under `dependencies.services`
+#   (type: agent) and referenced by their agent.id. First-class multi-agent /
+#   orchestration modeling is tracked as future work in ROADMAP.md — it is noted
+#   here rather than forced into the current schema.
+# =============================================================================
+
+apiVersion: aof/v1
+kind: AgentOwnershipContract
+schema_version: "2.0"
+
+metadata:
+  name: claims-intake-orchestrator
+  version: 1.0.0
+  created: "2026-05-01"
+  updated: "2026-06-25"
+  labels:
+    env: production
+    team: claims-operations
+  annotations:
+    runbook-url: "https://wiki.example.com/display/CLAIMS/orchestrator-runbook"
+
+agent:
+  id: claims-intake-orchestrator
+  name: Claims Intake Orchestrator Agent
+  description: >
+    Coordinates the first-notice-of-loss claims intake workflow by routing each claim
+    to specialized downstream agents: document extraction, fraud screening, and coverage
+    validation. It sequences these agents, aggregates their outputs, and hands off to a
+    human adjuster. It makes no coverage or payment decisions itself.
+  type: hybrid
+  domain: insurance-operations
+  tags:
+    - orchestrator
+    - claims
+    - workflow
+
+purpose:
+  business_purpose: >
+    Reduce claims cycle time by orchestrating specialized agents for a first-notice-of-loss
+    claim so that intake, document extraction, fraud screening, and coverage checks run in a
+    consistent, auditable sequence before a human adjuster review. The orchestrator owns the
+    workflow, not the individual decisions.
+  success_metrics:
+    intake_cycle_time: "< 10 minutes from claim submission to adjuster-ready package"
+    orchestration_success_rate: ">= 99% of claims complete the workflow without manual repair"
+    handoff_completeness: "100% of adjuster packages include all downstream agent outputs"
+  out_of_scope:
+    - "Coverage determination or claim approval/denial (human adjuster decision)"
+    - "Any payment authorization or reserve setting"
+    - "Modifying the behavior of downstream agents (they are governed by their own contracts)"
+
+ownership:
+  domain_owner:
+    name: Nadia Hassan
+    role: "Director, Claims Operations"
+    email: nadia.hassan@example.com
+    accountability:
+      - "Acceptable use of the orchestration workflow and adjuster handoff quality"
+      - "Business accountability for claims cycle-time outcomes"
+  technical_owner:
+    name: Victor Lin
+    role: "Engineering Lead, Claims Platform"
+    email: victor.lin@example.com
+    accountability:
+      - "Build quality and reliability of the orchestration and aggregation logic"
+      - "Runtime behavior, retries, and the audit trail across downstream agents"
+  escalation_path:
+    - level: 1
+      name: Rebecca Stone
+      email: rebecca.stone@example.com
+      role: VP Claims
+    - level: 2
+      name: Omar Farouk
+      email: omar.farouk@example.com
+      role: Chief Operating Officer
+
+authority:
+  autonomous_decisions:
+    - decision_type: route_to_agent
+      description: >
+        Route a claim to the next downstream agent in the workflow (document extraction,
+        fraud screening, or coverage validation) based on the claim type and prior step
+        outputs. Routing only; the orchestrator does not evaluate the claim itself.
+    - decision_type: retry_failed_step
+      description: >
+        Retry a failed downstream agent call up to a bounded number of attempts before
+        escalating the claim to a human for manual routing.
+  escalation_triggers:
+    - "A downstream agent is unavailable after the maximum retry count"
+    - "Downstream agents return conflicting outputs that cannot be reconciled"
+    - "A claim is flagged high-risk by the fraud screening agent"
+  prohibited_actions:
+    - "Cannot make coverage, approval, denial, or payment decisions"
+    - "Cannot override or alter a downstream agent's output"
+    - "Cannot skip fraud screening for any claim"
+    - "Cannot hand off an incomplete package to an adjuster"
+  override_mechanism:
+    who_can_pause:
+      - role: "technical_owner or on-call platform engineer"
+        method: "Feature flag 'claims-orchestrator-enabled' in the workflow config"
+        sla_minutes: 5
+      - role: "domain_owner"
+        method: "Claims operations console — pauses new claim intake"
+        sla_minutes: 10
+    who_can_override: "VP Claims (escalation level 1)"
+
+data:
+  permitted_sources:
+    - source: "Claims Intake Queue"
+      access_level: read
+      reason: "Reads submitted first-notice-of-loss claims to orchestrate."
+    - source: "Workflow State Store"
+      access_level: write
+      reason: "Persists per-claim orchestration state and downstream agent outputs."
+  prohibited_sources:
+    - "Payment and disbursement systems"
+    - "Policyholder financial account details"
+    - "Raw model weights or prompts of downstream agents"
+  sensitive_data_handling:
+    must_mask:
+      - claimant_name
+      - policy_number
+    must_encrypt_in_transit: true
+    cannot_retain: true
+    retention_policy: >
+      Orchestration state and downstream outputs are retained for 3 years per claims
+      audit policy; claimant PII is masked in all logs and traces.
+
+incident_response:
+  investigator_primary: "technical_owner (Victor Lin)"
+  investigator_secondary: "Claims Platform On-Call Engineer"
+  investigation_scope:
+    - "Which claims were affected and at which orchestration step did the failure occur?"
+    - "Did any claim skip fraud screening or receive an incomplete adjuster package?"
+    - "Were downstream agent outputs aggregated correctly and fully audited?"
+    - "Did retries and escalation triggers behave as specified?"
+  communication:
+    customer_owner: "domain_owner (Nadia Hassan) — coordinates claimant communication"
+    stakeholder_owner: "domain_owner — briefs VP Claims and operations leadership"
+    compliance_owner: "domain_owner — escalates to Legal if regulatory disclosure applies"
+  post_incident_review:
+    required: true
+    sla_days: 5
+    participants:
+      - domain_owner
+      - technical_owner
+
+governance:
+  review_cadence: quarterly
+  approval_required_for:
+    - "Adding or removing a downstream agent from the workflow"
+    - "Changing the orchestration sequence or retry policy"
+    - "Changing the adjuster handoff criteria"
+  change_control_board: "Claims Technology Governance Board"
+  last_reviewed: "2026-06-20"
+  next_review: "2026-09-20"
+
+lifecycle:
+  status: active
+  deployed_at: "2026-05-10"
+  monitoring:
+    real_time_metrics:
+      - "Workflow completion rate per claim type"
+      - "Downstream agent error/timeout rate"
+      - "Average intake cycle time"
+    review_frequency_days: 7
+  retirement:
+    criteria:
+      - "Orchestration is absorbed into the claims platform's native workflow engine"
+    planned_review_date: "2027-05-01"
+
+compliance:
+  frameworks:
+    - SOX
+    - NAIC-Model-Audit-Rule
+  data_classification: restricted
+  pii_handling: >
+    The orchestrator handles claimant name and policy number to route and aggregate work.
+    PII is masked in logs; the orchestrator does not persist claimant PII beyond the masked
+    workflow-state record needed for auditability.
+  audit_log_required: true
+  retention_policy: >
+    Orchestration audit records are retained for 3 years per claims audit policy. Downstream
+    agent outputs are retained with the claim record under the same schedule.
+
+risk:
+  risk_tier: high
+  blast_radius: >
+    A malfunction could stall claims intake at scale, route claims incorrectly, or hand off
+    incomplete packages to adjusters — delaying legitimate claims and degrading fraud screening
+    coverage. At peak the orchestrator handles roughly 5,000 claims per hour; a systematic
+    failure could delay or mis-route thousands of claims before the workflow is paused, though
+    no coverage or payment decisions are made by the orchestrator itself.
+  human_in_the_loop_required: true
+  kill_switch_owner: victor.lin@example.com
+
+signoff:
+  domain_owner:
+    name: Nadia Hassan
+    date: "2026-06-22"
+    confirmation: >
+      I have reviewed this contract and accept business accountability for the orchestration
+      workflow, its out-of-scope boundaries, and adjuster handoff quality.
+  technical_owner:
+    name: Victor Lin
+    date: "2026-06-23"
+    confirmation: >
+      I have reviewed this contract and accept accountability for the reliability of the
+      orchestration and aggregation logic, the retry/escalation behavior, and the cross-agent
+      audit trail.
+
+dependencies:
+  services:
+    # Downstream agents coordinated by this orchestrator, referenced by agent.id.
+    # Each is governed by its own AOF contract; this contract does not govern them.
+    - name: document-extraction-agent
+      type: agent
+      description: "Downstream agent that extracts structured fields from claim documents."
+    - name: fraud-detection-agent
+      type: agent
+      description: "Downstream agent that scores claims for fraud (see fraud-detection-agent.yaml)."
+    - name: coverage-validation-agent
+      type: agent
+      description: "Downstream agent that checks the claim against policy coverage rules."
+  data_sources:
+    - name: Workflow State Store
+      type: postgresql
+      description: "Stores per-claim orchestration state and aggregated outputs."
+
+sla:
+  availability: 99.9
+  max_latency_ms: 15000
+  error_rate_threshold: "< 1% of claims require manual workflow repair"
+  throughput_limit: "5000 claims/hour"
