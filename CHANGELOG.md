@@ -8,26 +8,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+_Packaging (Phase 2)_
 - **Installable Python package** `aof-validate` (`tools/pyproject.toml`) exposing the
-  `aof` command with `validate`, `check`, `create`, and a stubbed `export` subcommand.
-  `aof validate` accepts a file, a directory (searched recursively), or a glob, and
-  supports `--strict` and `--output json`. The JSON Schema is bundled as package data
-  (a test asserts it stays byte-identical to `schema/v1/`).
+  `aof` command with `validate`, `check`, `create`, and `export`. `aof validate`
+  accepts a file, a directory (searched recursively), or a glob, and supports
+  `--strict` and `--output json`. The JSON Schema is bundled as package data (a test
+  asserts it stays byte-identical to `schema/v1/`).
 - **Installable Node package** `aof-validate` (`tools/package.json`) with an `aof` bin
-  exposing the matching verbs (`validate` implemented; `check`/`create`/`export` stubbed).
+  implementing `aof validate` (lifecycle checks + `--strict`); the richer verbs live in
+  the Python CLI.
 - **Composite GitHub Action** (`action.yml`) that runs `aof validate` against a
   configurable `contracts` directory, with `strict` and `python-version` inputs, plus
   README usage and GitHub Marketplace listing instructions.
-- **Test suites**: pytest (`tools/tests/`) and `node:test` (`tools/test/`), both run in CI.
 - README **Installation** and **GitHub Action** sections.
 
+_v2 capabilities (Phase 3)_
+- **Optional `schema_version` field** (additive). Absent means `1.0`; a valid v1
+  contract still validates and receives an informational notice (never an error).
+- **Lifecycle enforcement** in `aof validate`: warns when `governance.next_review`,
+  `lifecycle.retirement_date`, `lifecycle.retirement.sunset_date`, or
+  `lifecycle.retirement.planned_review_date` have passed. `--strict` promotes these
+  warnings to CI-blocking failures. Implemented in both the Python and Node validators.
+- **`aof scan`** — recursive fleet inventory with a human-readable table and `--json`
+  (per-contract status: valid/unsigned/expired/invalid, owners, coverage summary).
+- **`aof diff <old> <new>`** — semantic diff classifying changes as material
+  (`authority`, `data`, `ownership.escalation_path`, `signoff`) vs cosmetic;
+  `--require-reapproval` exits non-zero on material changes with an unchanged signoff.
+- **`aof verify`** — optional detached GPG signature verification (no PKI, no private
+  keys). GPG implemented; a Sigstore/cosign recipe is documented in docs/INTEGRATION.md.
+- **`aof export --format markdown|a2a-card|opa`** — ownership card (markdown), an
+  experimental A2A Agent Card mapping (verified against a2a-protocol.org, v1.0.0), and
+  an OPA/Rego policy **stub** with TODO markers. AOF generates policy inputs; it does
+  not enforce at runtime.
+- **Test suites**: pytest (`tools/tests/`) and `node:test` (`tools/test/`), both run in CI.
+
 ### Changed
-- CI now installs the packages, runs both test suites, exercises the `aof` CLI against
-  every example and the annotated schema example, and runs the composite action
-  end-to-end.
+- CI installs the packages, runs both test suites, exercises the `aof` CLI against every
+  example and the annotated schema example, and runs the composite action end-to-end.
 - The standalone `tools/validate-contract.py` and `tools/validate-contract.js` are now
   thin **deprecated** shims that delegate to the packaged core and print a deprecation
   notice; their historical interfaces still work.
+- `schema_version` added to the JSON Schema (and the bundled copy) as an optional
+  property; the annotated example and the five example contracts had their governance
+  review dates refreshed so they are current.
 
 ### Removed
 - `tools/setup.py` (superseded by `tools/pyproject.toml`) and the standalone

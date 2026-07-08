@@ -239,6 +239,65 @@ Suggested Marketplace copy:
 
 ---
 
+## v2 capabilities
+
+AOF v2 adds fleet-scale governance commands to the `aof` CLI. Everything below is
+**deployment-time** tooling: it validates contracts and generates policy *inputs*.
+It does not enforce policy at runtime. v2 is fully backward compatible — a valid v1
+contract still validates and receives an informational notice that `schema_version`
+defaults to `1.0`.
+
+**Lifecycle enforcement** — `aof validate` flags contracts whose governance/lifecycle
+dates have passed (`governance.next_review`, `lifecycle.retirement_date`,
+`lifecycle.retirement.sunset_date`, `lifecycle.retirement.planned_review_date`). These
+are warnings by default; `--strict` promotes them to CI-blocking failures.
+
+```bash
+aof validate contracts               # warns on stale contracts, exits 0
+aof validate --strict contracts      # stale contract → non-zero (CI gate)
+```
+
+**`aof scan`** — fleet inventory. Answers "which agents have no owner or a stale
+contract?" across a directory.
+
+```bash
+aof scan contracts                   # human-readable table + summary
+aof scan --json contracts            # per-contract status + coverage stats
+```
+
+**`aof diff <old> <new>`** — semantic diff. Classifies changes as **material**
+(anything under `authority`, `data`, `ownership.escalation_path`, or `signoff`) vs.
+cosmetic. `--require-reapproval` exits non-zero when material changes are present but
+the `signoff` block is unchanged.
+
+```bash
+aof diff v1.yaml v2.yaml --require-reapproval
+```
+
+**`aof verify`** — optional detached-signature verification (GPG). Signing is never
+required and AOF ships no PKI or private keys; this is a defense-in-depth option. See
+[docs/INTEGRATION.md](docs/INTEGRATION.md) for the GPG and Sigstore/cosign recipes.
+
+```bash
+gpg --armor --detach-sign my-agent.yaml   # sign out of band → my-agent.yaml.asc
+aof verify my-agent.yaml                   # verifies against my-agent.yaml.asc
+```
+
+**`aof export --format <fmt>`** — generate artifacts from a validated contract:
+
+| Format | Output | Notes |
+|--------|--------|-------|
+| `markdown` | One-page ownership card for wikis/runbooks | — |
+| `a2a-card` | A2A Agent Card JSON (overlapping fields) | **Experimental** — mapped against the [A2A spec](https://a2a-protocol.org/latest/specification/); review before publishing |
+| `opa` | Rego policy stub from authority/data sections | Contains `TODO` markers; **AOF generates policy inputs, it does not enforce** |
+
+```bash
+aof export --format markdown my-agent.yaml -o ownership-card.md
+aof export --format opa my-agent.yaml -o policy.rego
+```
+
+---
+
 ## AOF Ecosystem
 
 The Agent Ownership Framework connects four layers of the enterprise AI stack: the named humans who write and sign contracts, the contract itself with its eight governance boundaries, the systems that consume and enforce it at deploy-time and runtime, and the enterprise platforms that ingest it for audit, risk, and operations. The diagram below shows how each layer feeds the next — from a domain owner signing off, to a CI/CD gate blocking a broken contract, to a risk management platform receiving the blast radius assessment.

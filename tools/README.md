@@ -44,6 +44,22 @@ node bin/aof.js validate ../examples/support-agent.yaml
 The `validate` verb accepts a file, a directory (searched recursively for
 `*.yaml` / `*.yml`), or a glob, and supports `--strict` and `--output json`.
 
+### v2 commands (Python CLI)
+
+All are deployment-time tooling. The exporters generate policy **inputs**; AOF does
+not enforce policy at runtime.
+
+| Command | Purpose |
+|---------|---------|
+| `aof validate --strict` | Fail on lifecycle warnings (stale `next_review`, past retirement/sunset dates) — CI-blocking |
+| `aof scan <dir>` | Fleet inventory: per-contract status (valid/unsigned/expired/invalid), owners, coverage stats (`--json`) |
+| `aof diff <old> <new>` | Semantic diff; classify **material** (authority/data/escalation/signoff) vs cosmetic; `--require-reapproval` |
+| `aof verify <file>` | Optional detached GPG signature verification (never required; no PKI) |
+| `aof export --format markdown\|a2a-card\|opa <file>` | Ownership card, experimental A2A card, or Rego policy stub |
+
+The Node CLI implements `aof validate` (with lifecycle checks and `--strict`); the
+commands above are provided by the Python package.
+
 ---
 
 ### Command: `aof validate`
