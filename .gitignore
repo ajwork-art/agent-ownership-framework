@@ -123,6 +123,9 @@ build/
 # Outreach materials (presentations, articles) — local only, not published to GitHub
 /outreach/
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # Secrets and credentials
 .env
 .env.*
