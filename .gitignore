@@ -120,6 +120,9 @@ build/
 *.min.js
 *.min.css
 
+# Outreach materials (presentations, articles) — local only, not published to GitHub
+/outreach/
+
 # Secrets and credentials
 .env
 .env.*
